@@ -7,7 +7,7 @@
 
 - 将 Bot 收到的消息（文字、图片、文件、引用、at 等）上报给 GS 核心
 - 接收 GS 核心下发的回复消息，并通过 Bot 发送回对应平台
-- 支持多协议适配：OneBot、QQBot、QQGuild、KOOK、Telegram、Discord 等（可能吧，其实只支持yunzai和qqbot）
+- 支持多协议适配：OneBot、QQBot、QQGuild、<del>KOOK、Telegram、Discord 等</del>（可能吧，其实只支持yunzai和qqbot）
 - 自动处理引用消息中的图片提取
 - <del>配置文件热更新，无需重启</del> 配置后重启生效
 - 支持 **锅巴面板** 可视化配置
