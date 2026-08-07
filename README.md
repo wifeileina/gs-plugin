@@ -29,8 +29,8 @@ TRSS-Yunzai/
 
 重启 Bot 即可自动加载插件。
 
-## 配置
-<details>
+## 说明（安装锅巴插件填写即可）
+<details><summary>配置 </summary>
 
 首次启动后，插件会在 `plugins/gs-plugin/config/config/` 下生成 `gs-config.yaml`，默认内容与 `config/default_config/gs-config.yaml` 相同。
 
@@ -124,7 +124,7 @@ gsuidBotPrefix:
 </details>
 
 ## 日志
-<details>
+<details><summary>真的有必要写吗</summary>
 
 所有日志前缀为 `[gs-plugin]`，可通过日志级别过滤：
 
@@ -137,7 +137,7 @@ gsuidBotPrefix:
 
 ## 文件结构
 
-<details>
+<details><summary>谁看这个</summary>
 
 ```
 gs-plugin/
