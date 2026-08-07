@@ -1,6 +1,7 @@
 # gs-plugin
 
 > GS（GScore）连接适配器插件，用于 TRSS-Yunzai Bot 与 GS 核心服务之间的消息转发。
+> > **基于 [小叶（xiaoye12123）](https://gitee.com/xiaoye12123/ws-plugin) 的插件修改
 
 ## 功能
 
@@ -157,13 +158,7 @@ gs-plugin/
     └── config/                 # 用户配置（运行时生成）
 ```
 
-## 常见问题
-
-**Q: 插件加载后没有连接？**
-检查 `gs-config.yaml` 中 `servers` 配置是否正确，address 不能是 `gs_address`（占位符）。
-
-**Q: 消息没有上报？**
-检查 `noGroup`/`yesGroup` 白名单黑名单配置，以及 `onlyReplyAt` 是否开启。
+## 常见问题？
 
 **Q: 如何与 ws-plugin 共存？**
-在 ws-plugin 的 `ws-config.yaml` 中将 GS 连接（type=3）的 address 改为 `ws_address`（占位符），GS 连接全部交给 gs-plugin 处理。
+把 ws-plugin 与早柚的连接关掉
