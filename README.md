@@ -39,7 +39,7 @@ TRSS-Yunzai/
 ```yaml
 # ── 连接服务列表 ──
 servers:
-  - name: 我的GS          # 连接名称（必须唯一）
+  - name: ktxy          # 连接名称（必须唯一）依旧暗藏
     address: ws://127.0.0.1:8765/ws   # GS 服务地址
     reconnectInterval: 5   # 重连间隔（秒）
     maxReconnectAttempts: 0 # 最大重连次数，0 为无限
@@ -102,11 +102,11 @@ servers:
 **配置多个连接：**
 ```yaml
 servers:
-  - name: GS主
+  - name: ktxy
     address: ws://192.168.1.100:8765/ws
     reconnectInterval: 5
     maxReconnectAttempts: 0
-  - name: GS备
+  - name: dny
     address: ws://192.168.1.101:8765/ws
     reconnectInterval: 5
     maxReconnectAttempts: 0
