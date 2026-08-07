@@ -1,7 +1,7 @@
 # gs-plugin
 
 > GS（GScore）连接适配器插件，用于 TRSS-Yunzai Bot 与 GS 核心服务之间的消息转发。
-> > **基于 [小叶（xiaoye12123）](https://gitee.com/xiaoye12123/ws-plugin) 的插件修改
+> > 基于 [小叶](https://gitee.com/xiaoye12123/ws-plugin) 的插件修改
 
 ## 功能
 
