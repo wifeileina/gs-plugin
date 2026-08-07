@@ -129,6 +129,10 @@ class Config {
     return this.getDefOrConfig('gs-config').tempMsgReport
   }
 
+  get groupIntercept () {
+    return this.getDefOrConfig('gs-config').groupIntercept || []
+  }
+
   getDefOrConfig (name) {
     let def = this.getdefSet(name)
     let config = this.getConfig(name)

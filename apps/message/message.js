@@ -43,6 +43,25 @@ Bot.on('message', async e => {
       if (Config.noMsgStart.some(i => e.message[0].text.startsWith(i))) return false
     }
   }
+  // 群聊消息拦截（按群聊+前缀+bot账号）
+  if (e.group_id && Array.isArray(Config.groupIntercept) && Config.groupIntercept.length > 0) {
+    const textSeg = e.message?.find(m => m.type === 'text')
+    if (textSeg) {
+      let rawText = textSeg.text || ''
+      // 去掉前面的@提及（CQ码格式和纯文本格式）
+      let cleanText = rawText.replace(/^(\[CQ:at,[^\]]*\]\s*)+/, '').replace(/^(@\S+\s*)+/, '')
+      for (const rule of Config.groupIntercept) {
+        // 检查botId（不填则对所有bot生效）
+        if (rule.botId && String(rule.botId) !== String(e.self_id)) continue
+        // 检查群聊ID
+        if (!Array.isArray(rule.groupIds) || !rule.groupIds.some(id => String(id) === String(e.group_id))) continue
+        // 检查前缀
+        if (Array.isArray(rule.prefixes) && rule.prefixes.some(p => cleanText.startsWith(p))) {
+          return false
+        }
+      }
+    }
+  }
   let isMaster = e.isMaster
   if (Version.isTrss) {
     if (e.user_id && cfg.master[e.self_id]?.includes(String(e.user_id))) {

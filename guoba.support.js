@@ -192,11 +192,55 @@ export function supportGuoba() {
                 componentProps: {
                   allowClear: true,
                   mode: 'tags',
-                  options: [
-                    { value: '扫码登陆' }
-                  ]
+                  options: []
                 }
               }
+            ]
+          }
+        },
+        {
+          component: 'Divider',
+          label: '群聊消息拦截'
+        },
+        {
+          field: 'gs.groupIntercept',
+          label: '拦截规则列表',
+          bottomHelpMessage: '指定群聊中，消息前缀匹配时不上报（自动忽略前面的@提及）。botId不填则对所有bot生效',
+          component: 'GSubForm',
+          componentProps: {
+            multiple: true,
+            schemas: [
+              {
+                field: 'botId',
+                label: 'BOT账号',
+                bottomHelpMessage: '可选，不填则对所有bot生效',
+                component: 'Input',
+                componentProps: {
+                  placeholder: '留空=所有bot'
+                }
+              },
+              {
+                field: 'groupIds',
+                label: '目标群聊',
+                bottomHelpMessage: '要拦截的群聊列表',
+                component: 'GSelectGroup',
+                componentProps: {
+                  allowAdd: true,
+                  allowDel: true,
+                  mode: 'multiple',
+                  options: groupList
+                }
+              },
+              {
+                field: 'prefixes',
+                label: '拦截前缀',
+                bottomHelpMessage: '消息以这些前缀开头时不上报（自动忽略前面的@提及）',
+                component: 'GTags',
+                componentProps: {
+                  allowAdd: true,
+                  allowDel: true,
+                },
+              },
             ]
           }
         },

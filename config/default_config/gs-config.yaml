@@ -69,5 +69,12 @@ noMsgStart: []
 # 不包含消息内容
 noMsgInclude: []
 
+# 群聊消息拦截配置
+# 按组配置，每组可指定多个群聊ID、多个前缀、可选的bot账号
+# botId: bot账号(self_id)，可选，不填则对所有bot生效
+# groupIds: 要拦截的群聊ID列表
+# prefixes: 要拦截的消息前缀列表（会自动忽略前面的@提及）
+groupIntercept: []
+
 # 数据库同步锁
 taskQueue: 0
