@@ -30,6 +30,7 @@ TRSS-Yunzai/
 重启 Bot 即可自动加载插件。
 
 ## 配置
+<details>
 
 首次启动后，插件会在 `plugins/gs-plugin/config/config/` 下生成 `gs-config.yaml`，默认内容与 `config/default_config/gs-config.yaml` 相同。
 
@@ -120,17 +121,10 @@ gsuidBotPrefix:
     prefix: "bot2"
     skipIfHasPrefix: false
 ```
-
-## 与 ws-plugin 的关系
-
-| 插件 | 用途 | 连接类型 |
-|------|------|----------|
-| **gs-plugin** | GS 连接专用 | 仅 GS WebSocket |
-| **ws-plugin** | 通用连接插件 | OneBot/Red/HTTP/GS 等 |
-
-两个插件可共存，互不干扰。若 ws-plugin 中已有 GS 连接（type=3），建议关闭其中一方的 GS 连接以避免重复转发。
+</details>
 
 ## 日志
+<details>
 
 所有日志前缀为 `[gs-plugin]`，可通过日志级别过滤：
 
@@ -139,7 +133,11 @@ gsuidBotPrefix:
 - `ERROR` — 连接失败、消息处理错误
 - `DEBUG` — 引用消息提取、文件注入等调试信息
 
+</details>
+
 ## 文件结构
+
+<details>
 
 ```
 gs-plugin/
@@ -157,8 +155,9 @@ gs-plugin/
     ├── default_config/         # 默认配置
     └── config/                 # 用户配置（运行时生成）
 ```
+</details>
+
 
 ## 常见问题？
 
-**Q: 如何与 ws-plugin 共存？**
-把 ws-plugin 与早柚的连接关掉
+/
