@@ -32,6 +32,7 @@ TRSS-Yunzai/
 ## 说明（安装锅巴插件填写即可）
 <details><summary>配置 </summary>
 
+
     看不懂看不懂
 
 首次启动后，插件会在 `plugins/gs-plugin/config/config/` 下生成 `gs-config.yaml`，默认内容与 `config/default_config/gs-config.yaml` 相同。
