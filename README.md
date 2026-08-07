@@ -127,6 +127,7 @@ gsuidBotPrefix:
 </details>
 
 ## 日志
+
 <details><summary>真的有必要写吗</summary>
 
 所有日志前缀为 `[gs-plugin]`，可通过日志级别过滤：
