@@ -1,10 +1,14 @@
 import lodash from 'lodash'
-import { Config } from './components/index.js'
+import { Config, getBotList } from './components/index.js'
 
 // 支持锅巴
 export function supportGuoba() {
   let groupList = Array.from(Bot.gl.values())
   groupList = groupList.map(item => item = { label: `${item.group_name}-${item.group_id}`, value: item.group_id })
+
+  // 获取已连接的BOT列表（含协议端信息）
+  const botList = getBotList()
+
   return {
     // 插件信息，将会显示在前端页面
     pluginInfo: {
@@ -25,62 +29,120 @@ export function supportGuoba() {
       schemas: [
         {
           component: 'Divider',
+          label: '插件开关'
+        },
+        {
+          field: 'gs.pluginEnabled',
+          label: '插件总开关',
+          bottomHelpMessage: '关闭后停止所有连接和消息转发',
+          component: 'Switch',
+        },
+        {
+          component: 'Divider',
           label: 'GS连接设置'
         },
         {
-          field: 'gs.servers',
-          label: '连接服务列表',
+          field: 'gs.serversName',
+          label: '连接名字',
+          bottomHelpMessage: '连接的名称标识',
+          component: 'Input',
+          required: true
+        },
+        {
+          field: 'gs.serversAddress',
+          label: '连接地址',
+          bottomHelpMessage: 'GS 服务的 WebSocket 地址',
+          component: 'Input',
+          required: true
+        },
+        {
+          field: 'gs.serversReconnectInterval',
+          label: '重连间隔',
+          component: 'InputNumber',
+          required: true,
+          componentProps: {
+            addonAfter: '秒'
+          }
+        },
+        {
+          field: 'gs.serversMaxReconnectAttempts',
+          label: '最大连接次数',
+          bottomHelpMessage: '0 为无限制',
+          component: 'InputNumber',
+          required: true,
+          componentProps: {
+            addonAfter: '次'
+          }
+        },
+        {
+          field: 'gs.serversAccessToken',
+          label: '鉴权Token',
+          bottomHelpMessage: 'GS 服务需要鉴权时填写',
+          component: 'Input',
+        },
+        {
+          component: 'Divider',
+          label: 'BOT分发'
+        },
+        {
+          field: 'gs.enabledBotsAll',
+          label: '转发全部BOT',
+          bottomHelpMessage: '开启后转发所有BOT的消息，无需手动指定',
+          component: 'Switch',
+        },
+        {
+          field: 'gs.enabledBots',
+          label: '指定BOT',
+          bottomHelpMessage: '关闭"转发全部BOT"后生效，选择要转发消息的BOT',
+          component: 'Select',
+          componentProps: {
+            mode: 'multiple',
+            options: botList,
+            placeholder: '请选择要启用的BOT'
+          }
+        },
+        {
+          component: 'Divider',
+          label: '群聊消息拦截'
+        },
+        {
+          field: 'gs.groupIntercept',
+          label: '拦截规则列表',
+          bottomHelpMessage: '指定群聊中，消息前缀匹配时不上报（自动忽略前面的@提及）。botId不填则对所有bot生效',
           component: 'GSubForm',
           componentProps: {
             multiple: true,
             schemas: [
               {
-                field: 'name',
-                label: '连接名字',
-                bottomHelpMessage: '请保证每个名字都不相同,否则会出问题',
-                component: 'Input',
-                required: true
-              },
-              {
-                field: 'address',
-                label: '连接地址',
-                bottomHelpMessage: 'GS 服务的 WebSocket 地址',
-                component: 'Input',
-                required: true
-              },
-              {
-                field: 'uin',
-                label: '绑定账号',
-                bottomHelpMessage: '填写BOT账号(uin)则仅转发该BOT消息；不填或填 "all" 则转发所有BOT消息',
+                field: 'botId',
+                label: 'BOT账号',
+                bottomHelpMessage: '可选，不填则对所有bot生效',
                 component: 'Input',
                 componentProps: {
-                  placeholder: 'all'
+                  placeholder: '留空=所有bot'
                 }
               },
               {
-                field: 'reconnectInterval',
-                label: '重连间隔',
-                component: 'InputNumber',
-                required: true,
+                field: 'groupIds',
+                label: '目标群聊',
+                bottomHelpMessage: '要拦截的群聊列表',
+                component: 'GSelectGroup',
                 componentProps: {
-                  addonAfter: '秒'
+                  allowAdd: true,
+                  allowDel: true,
+                  mode: 'multiple',
+                  options: groupList
                 }
               },
               {
-                field: 'maxReconnectAttempts',
-                label: '最大连接次数',
-                bottomHelpMessage: '0 为无限制',
-                component: 'InputNumber',
-                required: true,
+                field: 'prefixes',
+                label: '拦截前缀',
+                bottomHelpMessage: '消息以这些前缀开头时不上报（自动忽略前面的@提及）',
+                component: 'GTags',
                 componentProps: {
-                  addonAfter: '次'
-                }
-              },
-              {
-                field: 'accessToken',
-                label: '鉴权Token',
-                bottomHelpMessage: 'GS 服务需要鉴权时填写',
-                component: 'Input',
+                  allowAdd: true,
+                  allowDel: true,
+                },
               },
             ]
           }
@@ -200,52 +262,6 @@ export function supportGuoba() {
         },
         {
           component: 'Divider',
-          label: '群聊消息拦截'
-        },
-        {
-          field: 'gs.groupIntercept',
-          label: '拦截规则列表',
-          bottomHelpMessage: '指定群聊中，消息前缀匹配时不上报（自动忽略前面的@提及）。botId不填则对所有bot生效',
-          component: 'GSubForm',
-          componentProps: {
-            multiple: true,
-            schemas: [
-              {
-                field: 'botId',
-                label: 'BOT账号',
-                bottomHelpMessage: '可选，不填则对所有bot生效',
-                component: 'Input',
-                componentProps: {
-                  placeholder: '留空=所有bot'
-                }
-              },
-              {
-                field: 'groupIds',
-                label: '目标群聊',
-                bottomHelpMessage: '要拦截的群聊列表',
-                component: 'GSelectGroup',
-                componentProps: {
-                  allowAdd: true,
-                  allowDel: true,
-                  mode: 'multiple',
-                  options: groupList
-                }
-              },
-              {
-                field: 'prefixes',
-                label: '拦截前缀',
-                bottomHelpMessage: '消息以这些前缀开头时不上报（自动忽略前面的@提及）',
-                component: 'GTags',
-                componentProps: {
-                  allowAdd: true,
-                  allowDel: true,
-                },
-              },
-            ]
-          }
-        },
-        {
-          component: 'Divider',
           label: '其他设置'
         },
         {
@@ -303,11 +319,62 @@ export function supportGuoba() {
             noPrefixCommands: Array.isArray(item?.noPrefixCommands) ? item.noPrefixCommands : []
           }
         })
+        // 确保 pluginEnabled 有默认值
+        if (gs.pluginEnabled === undefined) gs.pluginEnabled = true
+        // 确保 enabledBots 有默认值
+        if (!gs.enabledBots || gs.enabledBots.length === 0) {
+          gs.enabledBots = ['all']
+        }
+        // 拆分 enabledBots：如果包含 'all' 则开关打开，否则展示具体列表
+        if (gs.enabledBots.includes('all')) {
+          gs.enabledBotsAll = true
+          gs.enabledBots = []
+        } else {
+          gs.enabledBotsAll = false
+        }
+        // 提取单连接设置
+        const server = (Array.isArray(gs.servers) && gs.servers.length > 0) ? gs.servers[0] : {}
+        gs.serversName = server.name || ''
+        gs.serversAddress = server.address || ''
+        gs.serversReconnectInterval = server.reconnectInterval ?? 5
+        gs.serversMaxReconnectAttempts = server.maxReconnectAttempts ?? 0
+        gs.serversAccessToken = server.accessToken || ''
         return { gs }
       },
       // 设置配置的方法（前端点确定后调用的方法）
       setConfigData(data, { Result }) {
         let config = Config.getCfg()
+        // 合并 enabledBotsAll + enabledBots → 写入 enabledBots
+        if ('gs.enabledBotsAll' in data || 'gs.enabledBots' in data) {
+          const all = data['gs.enabledBotsAll'] ?? config.enabledBots?.includes?.('all')
+          const bots = data['gs.enabledBots'] ?? (config.enabledBots?.filter?.(b => b !== 'all') || [])
+          const merged = all ? ['all'] : (Array.isArray(bots) ? bots : [])
+          if (!lodash.isEqual(config.enabledBots || [], merged)) {
+            Config.modify('gs-config', 'enabledBots', merged)
+          }
+          delete data['gs.enabledBotsAll']
+          delete data['gs.enabledBots']
+        }
+        // 合并单连接字段 → 写入 servers[0]
+        if ('gs.serversName' in data || 'gs.serversAddress' in data || 'gs.serversReconnectInterval' in data || 'gs.serversMaxReconnectAttempts' in data || 'gs.serversAccessToken' in data) {
+          const oldServer = (Array.isArray(config.servers) && config.servers.length > 0) ? config.servers[0] : {}
+          const newServer = {
+            name: data['gs.serversName'] ?? oldServer.name ?? '',
+            address: data['gs.serversAddress'] ?? oldServer.address ?? '',
+            enabled: true,
+            reconnectInterval: Number(data['gs.serversReconnectInterval'] ?? oldServer.reconnectInterval ?? 5),
+            maxReconnectAttempts: Number(data['gs.serversMaxReconnectAttempts'] ?? oldServer.maxReconnectAttempts ?? 0),
+            accessToken: data['gs.serversAccessToken'] ?? oldServer.accessToken ?? ''
+          }
+          if (!lodash.isEqual(config.servers?.[0], newServer)) {
+            Config.modify('gs-config', 'servers', [newServer])
+          }
+          delete data['gs.serversName']
+          delete data['gs.serversAddress']
+          delete data['gs.serversReconnectInterval']
+          delete data['gs.serversMaxReconnectAttempts']
+          delete data['gs.serversAccessToken']
+        }
         for (const key in data) {
           let split = key.split('.')
           if (key === 'gs.gsuidBotPrefixList') {

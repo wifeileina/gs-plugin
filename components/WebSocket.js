@@ -54,27 +54,64 @@ const adapterName = {
   }
 }
 
+/**
+ * 获取当前已连接的所有 BOT 列表（含协议端信息）
+ * 返回 [{ label, value }] 格式，供 Guoba 下拉选择使用
+ */
+function getBotList () {
+  const list = []
+  try {
+    if (typeof Bot !== 'undefined' && Bot.uin && Bot.uin.length > 0) {
+      for (const botId of Bot.uin) {
+        const bot = Bot.bots?.[botId]
+        const adapterName = bot?.adapter?.name || bot?.adapter?.id || ''
+        const label = adapterName ? `${botId} (${adapterName})` : String(botId)
+        list.push({ label, value: String(botId) })
+      }
+    }
+  } catch (e) {
+    logger.warn('[gs-plugin] 获取BOT列表失败:', e)
+  }
+  return list
+}
+
+/**
+ * 为一个服务器创建所有启用 bot 的 WebSocket 连接
+ */
+async function _createBotConnections (server) {
+  const enabledBots = Config.enabledBots
+  if (!enabledBots || enabledBots.length === 0) {
+    logger.mark('[gs-plugin] 未配置启用的BOT，跳过连接')
+    return
+  }
+  for (const botId of enabledBots) {
+    const data = _.cloneDeep(server)
+    const str = String(botId)
+    data.uin = botId
+    data.rawName = server.name
+    if (botId !== 'all') {
+      data.name = `${server.name}(${str.slice(0, 4)}...${str.slice(-2)})`
+    }
+    await createWebSocket(data)
+  }
+}
+
 async function createWebSocket (data) {
   if (typeof data.close != 'undefined' && typeof data.closed == 'undefined') {
     data.closed = data.close
     delete data.close
   }
-  // uin 默认值：不填或填 "all" 则转发所有 BOT 的消息
-  if (!data.uin || data.uin === 'all') {
-    data.uin = 'all'
-  }
-  data.rawName = data.rawName || data.name
-  if (Array.isArray(data.uin)) {
-    for (const uin of data.uin) {
-      const str = String(uin)
-      const i = _.cloneDeep(data)
-      i.name += `(${str.slice(0, 4) + '...' + str.slice(-2)})`
-      i.rawName = data.name
-      i.uin = uin
-      await createWebSocket(i)
-    }
+
+  // enabled 字段：false 时跳过连接
+  if (data.enabled === false || data.closed) return
+
+  // uin 由调用方保证已提供，此处做防御性检查
+  if (!data.uin || data.uin === '') {
+    logger.warn(`[gs-plugin] ${data.name} 未绑定BOT账号(uin为空)，跳过连接`)
     return
   }
+
+  data.rawName = data.rawName || data.name
   const client = new Client(data)
   const getQQBotAdapter = (self_id) => ({
     name: 'QQBot',
@@ -144,13 +181,13 @@ async function modifyWebSocket (target) {
   switch (target.type) {
     case 'add':
     case 'open':
-      await createWebSocket(target.data)
+      await _createBotConnections(target.data)
       break
     case 'del':
     case 'close':
       for (const i of allSocketList) {
-        const reg = new RegExp(`^${target.data.name}\\\(.{1,6}\\\)$`)
-        if (i.name == target.data.name || reg.test(i.name)) {
+        const reg = new RegExp(`^${_.escapeRegExp(target.data.name)}(\\\(.{1,6}\\\))?$`)
+        if (i.name === target.data.name || reg.test(i.name)) {
           i.close()
         }
       }
@@ -166,8 +203,13 @@ function clearWebSocket () {
 }
 
 async function initWebSocket () {
-  for (const i of Config.servers) {
-    await createWebSocket(i)
+  // 插件总开关检查
+  if (Config.pluginEnabled === false) {
+    logger.mark('[gs-plugin] 插件已关闭，跳过初始化连接')
+    return
+  }
+  for (const server of Config.servers) {
+    await _createBotConnections(server)
   }
 }
 
@@ -178,5 +220,6 @@ export {
   allSocketList,
   setAllSocketList,
   sendSocketList,
-  createWebSocket
+  createWebSocket,
+  getBotList
 }

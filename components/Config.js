@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import YamlReader from './YamlReader.js'
 import cfg from '../../../lib/config/config.js'
 import _ from 'lodash'
-import { modifyWebSocket } from './WebSocket.js'
+import { modifyWebSocket, initWebSocket, clearWebSocket } from './WebSocket.js'
 
 const Path = process.cwd()
 const Plugin_Name = 'gs-plugin'
@@ -133,6 +133,14 @@ class Config {
     return this.getDefOrConfig('gs-config').groupIntercept || []
   }
 
+  get pluginEnabled () {
+    return this.getDefOrConfig('gs-config').pluginEnabled
+  }
+
+  get enabledBots () {
+    return this.getDefOrConfig('gs-config').enabledBots || []
+  }
+
   getDefOrConfig (name) {
     let def = this.getdefSet(name)
     let config = this.getConfig(name)
@@ -173,6 +181,24 @@ class Config {
         for (const key in object) {
           if (Object.hasOwnProperty.call(object, key)) {
             const value = object[key]
+            // 插件总开关变更
+            if (key === 'pluginEnabled') {
+              if (value.newValue === true) {
+                logger.mark('[gs-plugin] 插件已开启，重新初始化所有连接')
+                await initWebSocket()
+              } else if (value.newValue === false) {
+                logger.mark('[gs-plugin] 插件已关闭，断开所有连接')
+                clearWebSocket()
+              }
+              continue
+            }
+            // 启用BOT列表变更
+            if (key === 'enabledBots') {
+              logger.mark('[gs-plugin] 启用BOT列表已变更，重新初始化所有连接')
+              clearWebSocket()
+              await initWebSocket()
+              continue
+            }
             const arr = key.split('.')
             if (arr[0] !== 'servers') continue
             let data = newConfig.servers[arr[1]]
@@ -185,6 +211,13 @@ class Config {
               target.type = 'add'
             } else if (typeof value.newValue === 'undefined' && typeof value.oldValue === 'object') {
               target.type = 'del'
+            } else if (arr[2] === 'enabled') {
+              // enabled 字段：true 开启连接，false 关闭连接
+              if (value.newValue === true) {
+                target.type = 'open'
+              } else if (value.newValue === false) {
+                target.type = 'close'
+              }
             } else if (value.newValue === true && (value.oldValue === false || typeof value.oldValue === 'undefined')) {
               target.type = 'close'
             } else if (value.newValue === false && (value.oldValue === true || typeof value.oldValue === 'undefined')) {

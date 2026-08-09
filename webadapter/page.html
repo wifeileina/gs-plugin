@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gs适配器</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #f0f1f3;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #333; line-height: 1.5; padding: 16px;
+}
+
+.layout { display: flex; gap: 12px; max-width: 900px; margin: 0 auto; align-items: flex-start; }
+
+/* ── 左侧导航 ── */
+.nav-side {
+  flex-shrink: 0; width: 180px;
+  display: flex; flex-direction: column;
+  background: #f8f9fa; border-radius: 10px; overflow: hidden;
+  border: 1px solid #e8eaed;
+  position: sticky; top: 16px;
+}
+.nav-header {
+  padding: 14px 16px; border-bottom: 1px solid #e8eaed;
+  font-size: 15px; font-weight: 700; color: #1a1a2e;
+  display: flex; align-items: center; gap: 8px;
+}
+.nav-items { flex: 1; padding: 6px 0; }
+.nav-tab {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px;
+  font-size: 13px; font-weight: 500; color: #6b7280;
+  cursor: pointer; transition: all 0.15s;
+  border: none; background: transparent; font-family: inherit;
+  text-decoration: none; position: relative;
+}
+.nav-tab:hover { color: #333; background: #f0f1f3; }
+.nav-tab.active { color: #4f46e5; background: #eef0ff; font-weight: 600; }
+.nav-tab.active::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; background: #4f46e5; border-radius: 0 2px 2px 0;
+}
+.nav-tab .ico { font-size: 15px; flex-shrink: 0; }
+.nav-footer {
+  padding: 10px 16px; border-top: 1px solid #e8eaed;
+  font-size: 12px; color: #6b7280;
+  display: flex; align-items: center; gap: 6px;
+}
+
+/* ── 内容区 ── */
+.content { flex: 1; min-width: 0; }
+.content-header {
+  background: #fff; border-radius: 10px;
+  padding: 14px 20px; margin-bottom: 12px;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.content-header h1 { font-size: 17px; font-weight: 700; color: #111827; }
+.content-header .sub { margin-top: 3px; color: #9ca3af; font-size: 12px; }
+
+.card {
+  background: #fff; border-radius: 10px;
+  padding: 16px 20px; margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.page-header { display: flex; align-items: center; justify-content: space-between; }
+.page-header h1 { font-size: 16px; font-weight: 700; color: #1a1a2e; }
+.page-header .sub { margin-top: 2px; color: #999; font-size: 11px; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.section-title {
+  font-size: 14px; font-weight: 600; color: #111827;
+  margin-bottom: 10px; padding-bottom: 6px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* ── 表单 ── */
+.form-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.form-row label { width: 70px; font-size: 13px; color: #6b7280; flex-shrink: 0; text-align: right; }
+.form-row .hint { font-size: 12px; color: #9ca3af; }
+
+input[type="text"], input[type="number"], select {
+  padding: 5px 8px; border: 1px solid #e5e7eb; border-radius: 6px;
+  font-size: 13px; background: #fff; color: #333; outline: none;
+  font-family: inherit; transition: border-color 0.15s;
+}
+input:focus, select:focus { border-color: #6366f1; }
+input[type="text"] { width: 160px; }
+input[type="number"] { width: 70px; }
+select { width: 140px; }
+
+/* ── 开关 ── */
+.toggle {
+  width: 36px; height: 20px; border-radius: 10px;
+  background: #d1d5db; cursor: pointer; transition: background 0.2s;
+  flex-shrink: 0; display: inline-block; position: relative; vertical-align: middle;
+}
+.toggle::after {
+  content: ''; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; position: absolute; top: 2px; left: 2px;
+  transition: left 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+.toggle.on { background: #6366f1; }
+.toggle.on::after { left: 18px; }
+.toggle-wrap { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ── 按钮 ── */
+.btn {
+  padding: 5px 12px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 13px;
+  font-weight: 500; cursor: pointer; transition: all 0.15s; font-family: inherit;
+  display: inline-block; background: #fff; color: #6b7280; line-height: 1.4;
+}
+.btn:hover { background: #f5f6f8; }
+.btn-primary { background: #6366f1; color: #fff; border-color: #6366f1; }
+.btn-primary:hover { background: #5457e5; }
+.btn-danger { color: #e74c3c; border-color: #f0c8c4; }
+.btn-danger:hover { background: #fdf2f2; }
+.btn-xs { padding: 2px 6px; font-size: 12px; }
+
+/* ── 子卡片 ── */
+.sub-card {
+  background: #f9fafb; border: 1px solid #f0f0f0; border-radius: 8px;
+  padding: 12px 14px; margin-bottom: 8px;
+}
+.sub-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.sub-card-title { font-size: 13px; font-weight: 600; color: #374151; }
+
+/* ── 标签 ── */
+.tag-list { display: flex; flex-wrap: wrap; gap: 3px; flex: 1; }
+.tag {
+  display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px;
+  background: #eef0ff; color: #4f46e5; border: 1px solid #d5d8f5;
+}
+.tag .rm { cursor: pointer; opacity: 0.5; margin-left: 2px; }
+.tag .rm:hover { opacity: 1; }
+.tag-avatar { width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 2px; }
+.tag-input-wrap { display: inline-flex; align-items: center; gap: 3px; }
+.tag-input-wrap input {
+  padding: 2px 5px; border: 1px solid #d5d7db; border-radius: 3px;
+  font-size: 11px; background: #fff; outline: none; width: 100px;
+}
+.tag-input-wrap input:focus { border-color: #6366f1; }
+
+/* ── 群聊选择器 ── */
+.group-select-wrap { position: relative; flex: 1; min-width: 0; }
+.group-select-trigger {
+  display: flex; align-items: center; gap: 4px; min-height: 28px;
+  padding: 2px 8px; border: 1px solid #e5e7eb; border-radius: 6px;
+  background: #fff; cursor: pointer; transition: border-color 0.15s;
+}
+.group-select-trigger:hover { border-color: #6366f1; }
+.group-select-trigger .count {
+  flex: 1; font-size: 12px; color: #6b7280; text-align: left;
+}
+.group-select-trigger .arrow {
+  font-size: 10px; color: #9ca3af; flex-shrink: 0;
+}
+.group-select-tags {
+  display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;
+}
+.group-select-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+  max-height: 220px; overflow-y: auto; margin-top: 2px;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: none;
+}
+.group-select-option {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; font-size: 12px; color: #374151; cursor: pointer;
+  transition: background 0.1s; width: 100%;
+}
+.group-select-option:hover { background: #f5f6f8; }
+.group-select-option input[type="checkbox"] { margin: 0; flex-shrink: 0; }
+.group-select-option .opt-avatar {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  background: #e5e7eb; object-fit: cover;
+}
+.group-select-option .opt-info { flex: 1; min-width: 0; }
+.group-select-option .opt-name { font-size: 12px; color: #374151; white-space: nowrap; }
+.group-select-option .opt-id { font-size: 10px; color: #9ca3af; }
+.group-select-option.selected { background: #eef0ff; }
+.group-select-dropdown .no-groups {
+  padding: 10px; text-align: center; font-size: 12px; color: #9ca3af;
+}
+
+/* ── Toast ── */
+.toast {
+  position: fixed; top: 12px; right: 12px; z-index: 999;
+  padding: 6px 14px; border-radius: 4px; font-size: 12px; background: #fff;
+  border: 1px solid #e0e1e4; animation: slideIn 0.3s ease; display: none;
+}
+.toast.show { display: block; }
+.toast.success { border-left: 3px solid #22c55e; color: #16a34a; }
+.toast.error { border-left: 3px solid #ef4444; color: #dc2626; }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+.status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 3px; }
+.status-dot.on { background: #22c55e; }
+.status-dot.off { background: #bbb; }
+.status-text { font-size: 11px; color: #888; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+
+/* ── 浮动保存按钮 ── */
+.save-float {
+  position: fixed; top: 16px; right: 16px; z-index: 998;
+  display: none; align-items: center; gap: 8px;
+  padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  background: #6366f1; color: #fff; cursor: pointer; border: none; font-family: inherit;
+  box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+  transition: all 0.2s; animation: floatIn 0.25s ease;
+}
+.save-float.show { display: inline-flex; }
+.save-float:hover { background: #5457e5; box-shadow: 0 6px 16px rgba(99,102,241,0.4); }
+@keyframes floatIn { from { transform: translateY(-12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="nav-side">
+    <div class="nav-header">📡 Gs适配器</div>
+    <div class="nav-items">
+      <a class="nav-tab active" data-tab="tab-core" onclick="switchTab('tab-core')">
+        <span class="ico">🔌</span>核心连接
+      </a>
+      <a class="nav-tab" data-tab="tab-ext" onclick="switchTab('tab-ext')">
+        <span class="ico">⚙️</span>高级设置
+      </a>
+    </div>
+    <div class="nav-footer">
+      <span class="status-dot off" id="statusDot"></span><span id="statusLabel">加载中</span>
+    </div>
+  </nav>
+
+  <div class="content">
+    <div class="content-header">
+      <div>
+        <h1 id="pageTitle">核心连接</h1>
+        <div class="sub">GS连接适配器 — Bot与GS核心服务之间的消息转发管理</div>
+      </div>
+    </div>
+
+    <div class="tab-panel active" id="tab-core">
+      <div class="card">
+        <div class="section-title">🔌 插件开关</div>
+        <div class="form-row">
+          <label>总开关</label>
+          <div class="toggle-wrap">
+            <div class="toggle" id="pluginEnabled" onclick="toggle(this)"></div>
+            <span class="hint">关闭后停止所有连接和转发</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">🔗 GS连接设置</div>
+        <div id="serverForm" style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;">
+          <div class="form-row"><label>名称</label><input type="text" id="srvName" onchange="computeDirty()"></div>
+          <div class="form-row"><label>地址</label><input type="text" id="srvAddress" onchange="computeDirty()" style="width:100%;"></div>
+          <div class="form-row"><label>重连间隔</label><input type="number" id="srvReconnectInterval" min="0" onchange="computeDirty()"><span class="hint">秒</span></div>
+          <div class="form-row"><label>最大重连</label><input type="number" id="srvMaxReconnect" min="0" onchange="computeDirty()"></div>
+          <div class="form-row" style="grid-column:1/-1;"><label>Token</label><input type="text" id="srvToken" onchange="computeDirty()" style="width:100%;"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">🤖 BOT分发</div>
+        <div class="form-row">
+          <label>全部转发</label>
+          <div class="toggle-wrap">
+            <div class="toggle" id="enabledBotsAll" onclick="toggle(this);toggleBotSelect()"></div>
+            <span class="hint">开启后转发所有BOT</span>
+          </div>
+        </div>
+        <div class="form-row" id="specBotRow">
+          <label>指定BOT</label>
+          <div id="botSelectArea"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-ext">
+      <div class="card">
+        <div class="section-title">🚫 群聊消息拦截</div>
+        <div id="interceptList"></div>
+        <button class="btn" onclick="addIntercept()" style="margin-top:4px;">+ 添加</button>
+      </div>
+
+      <div class="card">
+        <div class="section-title">🔔 通知设置</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;">
+          <div class="form-row"><label>不转发前缀</label><div id="noMsgStartTags"></div></div>
+          <div class="form-row"><label>不转发包含</label><div id="noMsgIncludeTags"></div></div>
+          <div class="form-row"><label>黑名单群聊</label><div id="noGroupTags"></div></div>
+          <div class="form-row"><label>白名单群聊</label><div id="yesGroupTags"></div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-top:4px;">
+          <div class="form-row"><label>断开通知</label><div class="toggle-wrap"><div class="toggle" id="disconnectToMaster" onclick="toggle(this)"></div></div></div>
+          <div class="form-row"><label>重连通知</label><div class="toggle-wrap"><div class="toggle" id="reconnectToMaster" onclick="toggle(this)"></div></div></div>
+          <div class="form-row"><label>首次连接</label><div class="toggle-wrap"><div class="toggle" id="firstconnectToMaster" onclick="toggle(this)"></div></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">🏷️ GS前缀设置</div>
+        <div id="prefixList"></div>
+        <button class="btn" onclick="addPrefix()" style="margin-top:4px;">+ 添加</button>
+      </div>
+
+      <div class="card">
+        <div class="section-title">⚙️ 其他设置</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;">
+          <div class="form-row"><label>禁言拦截</label><div class="toggle-wrap"><div class="toggle" id="muteStop" onclick="toggle(this)"></div></div></div>
+          <div class="form-row"><label>忽略仅艾特</label><div class="toggle-wrap"><div class="toggle" id="ignoreOnlyReplyAt" onclick="toggle(this)"></div></div></div>
+          <div class="form-row"><label>临时会话</label><div class="toggle-wrap"><div class="toggle" id="tempMsgReport" onclick="toggle(this)"></div></div></div>
+          <div class="form-row"><label>消息存储</label><input type="number" id="msgStoreTime" min="0" onchange="computeDirty()"><span class="hint">秒</span></div>
+          <div class="form-row"><label>同步锁</label><input type="number" id="taskQueue" min="0" onchange="computeDirty()"><span class="hint">0=关</span></div>
+          <div class="form-row"><label>心跳频率</label><input type="number" id="heartbeatInterval" min="0" onchange="computeDirty()"><span class="hint">秒</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<button class="save-float" id="saveFloat" onclick="saveConfig()">💾 保存配置</button>
+
+<script>
+const WEB_BASE = new URLSearchParams(location.search).get('__webBase') || ''
+const API = (path) => `${WEB_BASE}/api${path}`
+let configData = {}, botList = [], originalBody = null
+
+// 构建当前配置主体（用于保存和对比）—— 深拷贝避免引用共享
+function buildConfigBody() {
+  return {
+    pluginEnabled: isOn('pluginEnabled'),
+    enabledBots: isOn('enabledBotsAll') ? ['all'] : [...document.querySelectorAll('.bot-check:checked')].map(cb => cb.value),
+    servers: [{
+      name: document.getElementById('srvName').value || '',
+      address: document.getElementById('srvAddress').value || '',
+      enabled: true,
+      reconnectInterval: Number(document.getElementById('srvReconnectInterval').value) || 5,
+      maxReconnectAttempts: Number(document.getElementById('srvMaxReconnect').value) || 0,
+      accessToken: document.getElementById('srvToken').value || ''
+    }],
+    groupIntercept: JSON.parse(JSON.stringify(configData.groupIntercept || [])),
+    noMsgStart: JSON.parse(JSON.stringify(configData.noMsgStart || [])),
+    noMsgInclude: JSON.parse(JSON.stringify(configData.noMsgInclude || [])),
+    noGroup: JSON.parse(JSON.stringify(configData.noGroup || [])),
+    yesGroup: JSON.parse(JSON.stringify(configData.yesGroup || [])),
+    muteStop: isOn('muteStop'), ignoreOnlyReplyAt: isOn('ignoreOnlyReplyAt'),
+    tempMsgReport: isOn('tempMsgReport'),
+    disconnectToMaster: isOn('disconnectToMaster'), reconnectToMaster: isOn('reconnectToMaster'),
+    firstconnectToMaster: isOn('firstconnectToMaster'),
+    msgStoreTime: Number(document.getElementById('msgStoreTime').value) || 300,
+    taskQueue: Number(document.getElementById('taskQueue').value) || 0,
+    heartbeatInterval: Number(document.getElementById('heartbeatInterval').value) || 5,
+    gsuidBotPrefix: JSON.parse(JSON.stringify(configData.gsuidBotPrefix || {})),
+  }
+}
+
+function switchTab(tabId) {
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'))
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
+  document.querySelector(`[data-tab="${tabId}"]`).classList.add('active')
+  document.getElementById(tabId).classList.add('active')
+  const titles = { 'tab-core': '核心连接', 'tab-ext': '高级设置' }
+  const titleEl = document.getElementById('pageTitle')
+  if (titleEl && titles[tabId]) titleEl.textContent = titles[tabId]
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast')
+  t.textContent = msg; t.className = `toast ${type} show`
+  setTimeout(() => t.classList.remove('show'), 2500)
+}
+
+// ── 开关 ──
+function toggle(el) { el.classList.toggle('on'); computeDirty() }
+function setToggle(elId, on) {
+  const el = document.getElementById(elId)
+  if (el) { if (on) el.classList.add('on'); else el.classList.remove('on') }
+}
+function isOn(elId) { return document.getElementById(elId).classList.contains('on') }
+
+// ── 脏标记（对比实际变更，回撤到原值则隐藏） ──
+function computeDirty() {
+  const current = buildConfigBody()
+  const dirty = JSON.stringify(current) !== JSON.stringify(originalBody)
+  const el = document.getElementById('saveFloat')
+  if (dirty) el.classList.add('show'); else el.classList.remove('show')
+}
+function clearDirty() {
+  originalBody = buildConfigBody()
+  document.getElementById('saveFloat').classList.remove('show')
+}
+
+async function loadConfig() {
+  try {
+    const [cfgRes, grpRes] = await Promise.all([
+      fetch(API('/gs-plugin/config')),
+      fetch(API('/gs-plugin/groups'))
+    ])
+    const json = await cfgRes.json()
+    if (!json.ok) { showToast('加载失败: ' + json.error, 'error'); return }
+    configData = json.data; botList = configData.botList || []
+    if (grpRes.ok) {
+      const grpJson = await grpRes.json()
+      groupList = grpJson.data || []
+    }
+    renderAll()
+    originalBody = buildConfigBody()
+  } catch(e) { showToast('加载失败: ' + e.message, 'error') }
+}
+
+function renderAll() {
+  const d = configData
+  setToggle('pluginEnabled', d.pluginEnabled); updateStatus(d.pluginEnabled)
+  setToggle('enabledBotsAll', d.enabledBotsAll)
+  renderBotSelect(); toggleBotSelect()
+  // 单连接设置
+  const srv = d.server || {}
+  document.getElementById('srvName').value = srv.name || ''
+  document.getElementById('srvAddress').value = srv.address || ''
+  document.getElementById('srvReconnectInterval').value = srv.reconnectInterval ?? 5
+  document.getElementById('srvMaxReconnect').value = srv.maxReconnectAttempts ?? 0
+  document.getElementById('srvToken').value = srv.accessToken || ''
+  renderIntercepts()
+  renderTagArea('noMsgStartTags', d.noMsgStart, 'noMsgStart')
+  renderTagArea('noMsgIncludeTags', d.noMsgInclude, 'noMsgInclude')
+  renderTagArea('noGroupTags', d.noGroup, 'noGroup')
+  renderTagArea('yesGroupTags', d.yesGroup, 'yesGroup')
+  setToggle('disconnectToMaster', d.disconnectToMaster)
+  setToggle('reconnectToMaster', d.reconnectToMaster)
+  setToggle('firstconnectToMaster', d.firstconnectToMaster)
+  renderPrefixes()
+  setToggle('muteStop', d.muteStop)
+  setToggle('ignoreOnlyReplyAt', d.ignoreOnlyReplyAt)
+  setToggle('tempMsgReport', d.tempMsgReport)
+  document.getElementById('msgStoreTime').value = d.msgStoreTime ?? 300
+  document.getElementById('taskQueue').value = d.taskQueue ?? 0
+  document.getElementById('heartbeatInterval').value = d.heartbeatInterval ?? 5
+}
+
+function updateStatus(on) {
+  const dot = document.getElementById('statusDot'), label = document.getElementById('statusLabel')
+  if (on) { dot.className = 'status-dot on'; label.textContent = '运行中' }
+  else { dot.className = 'status-dot off'; label.textContent = '已关闭' }
+}
+
+function toggleBotSelect() {
+  document.getElementById('specBotRow').style.display = isOn('enabledBotsAll') ? 'none' : 'flex'
+}
+
+function renderBotSelect() {
+  const area = document.getElementById('botSelectArea')
+  if (botList.length === 0) { area.innerHTML = '<span class="hint">暂无已连接BOT</span>'; return }
+  const selected = configData.enabledBots || []
+  area.innerHTML = botList.map(b => {
+    const c = selected.includes(b.value) ? 'checked' : ''
+    return `<label style="margin-right:8px;font-size:12px;cursor:pointer;"><input type="checkbox" value="${b.value}" ${c} class="bot-check" onchange="computeDirty()"> ${escHtml(b.label)}</label>`
+  }).join('')
+}
+
+function renderIntercepts() {
+  const list = document.getElementById('interceptList')
+  const items = configData.groupIntercept || []
+  if (items.length === 0) { list.innerHTML = '<p style="color:#aaa;font-size:12px;">暂无拦截规则</p>'; return }
+  list.innerHTML = items.map((item, i) => `
+    <div class="sub-card">
+      <div class="sub-card-header">
+        <span class="sub-card-title">规则 #${i+1}</span>
+        <button class="btn btn-danger btn-xs" onclick="removeIntercept(${i})">删</button>
+      </div>
+      <div class="form-row"><label>BOT</label><input type="text" value="${escHtml(item.botId||'')}" placeholder="留空=所有" onchange="updateIntercept(${i},'botId',this.value)"></div>
+      <div class="form-row"><label>群聊</label><div class="group-select-wrap" id="groupSelectWrap${i}"></div></div>
+      <div class="form-row"><label>前缀</label><div class="tag-list" id="interceptPrefixes${i}"></div></div>
+    </div>
+  `).join('')
+  items.forEach((item, i) => {
+    renderGroupSelect(i, item.groupIds||[])
+    renderTagList(`interceptPrefixes${i}`, item.prefixes||[], (v) => updateInterceptArr(i, 'prefixes', v))
+  })
+}
+// ── 群聊选择器 ──
+let groupList = []
+
+function renderGroupSelect(index, selectedIds) {
+  const wrap = document.getElementById(`groupSelectWrap${index}`)
+  if (!wrap) return
+  const selected = selectedIds || []
+  const selectedLabels = selected.map(id => {
+    const g = groupList.find(g => g.value === id)
+    return g ? g.label : id
+  })
+  const selectedAvatars = selected.map(id => {
+    const g = groupList.find(g => g.value === id)
+    return g ? g.avatar : ''
+  })
+  wrap.innerHTML = `
+    <div class="group-select-trigger" onclick="toggleGroupDropdown(${index})">
+      <span class="count">${selected.length > 0 ? '已选 ' + selected.length + ' 个群聊' : '选择群聊...'}</span>
+      <span class="arrow">▾</span>
+    </div>
+    ${selected.length > 0 ? `<div class="group-select-tags" id="groupSelectTags${index}">
+      ${selected.map((id, si) => {
+        const g = groupList.find(g => g.value === id)
+        return `<span class="tag"><img class="tag-avatar" src="${escHtml(selectedAvatars[si])}" onerror="this.style.display='none'" loading="lazy"> ${escHtml(selectedLabels[si] || id)} <span class="rm" onclick="event.stopPropagation();removeGroup(${index},'${escHtml(id)}')">&times;</span></span>`
+      }).join('')}
+    </div>` : ''}
+    <div class="group-select-dropdown" id="groupDropdown${index}">
+      ${groupList.length === 0
+        ? '<div class="no-groups">暂无可用群聊</div>'
+        : groupList.map(g => {
+            const checked = selected.includes(g.value) ? 'checked' : ''
+            const cls = checked ? 'selected' : ''
+            return `<div class="group-select-option ${cls}" data-value="${escHtml(g.value)}" onclick="toggleGroupOption(${index},'${escHtml(g.value)}',this)">
+              <input type="checkbox" value="${escHtml(g.value)}" ${checked}>
+              <img class="opt-avatar" src="${escHtml(g.avatar)}" onerror="this.style.display='none'" loading="lazy">
+              <div class="opt-info">
+                <div class="opt-name">${escHtml(g.group_name || g.label.split('-')[0])} <span class="opt-id">${escHtml(g.value)}</span></div>
+              </div>
+            </div>`
+          }).join('')}
+    </div>
+  `
+}
+
+function toggleGroupDropdown(index) {
+  const dd = document.getElementById(`groupDropdown${index}`)
+  if (!dd) return
+  // 关闭其他所有下拉
+  document.querySelectorAll('.group-select-dropdown').forEach(el => { if (el.id !== `groupDropdown${index}`) el.style.display = 'none' })
+  dd.style.display = dd.style.display === 'none' || dd.style.display === '' ? 'block' : 'none'
+}
+
+function toggleGroupOption(index, value, el) {
+  const cb = el.querySelector('input[type="checkbox"]')
+  cb.checked = !cb.checked
+  const checked = cb.checked
+  // 更新选中样式
+  if (checked) el.classList.add('selected'); else el.classList.remove('selected')
+  // 更新数据
+  const item = configData.groupIntercept?.[index]
+  if (!item) return
+  if (!item.groupIds) item.groupIds = []
+  if (checked) {
+    if (!item.groupIds.includes(value)) item.groupIds.push(value)
+  } else {
+    item.groupIds = item.groupIds.filter(id => id !== value)
+  }
+  // 更新触发区计数
+  const countEl = document.querySelector(`#groupSelectWrap${index} .count`)
+  if (countEl) {
+    countEl.textContent = item.groupIds.length > 0 ? '已选 ' + item.groupIds.length + ' 个群聊' : '选择群聊...'
+  }
+  // 更新标签区
+  updateGroupTags(index, item.groupIds)
+  computeDirty()
+}
+
+function updateGroupTags(index, selectedIds) {
+  const wrap = document.getElementById(`groupSelectWrap${index}`)
+  if (!wrap) return
+  let tagsDiv = document.getElementById(`groupSelectTags${index}`)
+  if (!selectedIds || selectedIds.length === 0) {
+    if (tagsDiv) tagsDiv.remove()
+    return
+  }
+  if (!tagsDiv) {
+    tagsDiv = document.createElement('div')
+    tagsDiv.className = 'group-select-tags'
+    tagsDiv.id = `groupSelectTags${index}`
+    wrap.insertBefore(tagsDiv, wrap.querySelector('.group-select-dropdown'))
+  }
+  const selectedLabels = selectedIds.map(id => {
+    const g = groupList.find(g => g.value === id)
+    return g ? g.label : id
+  })
+  const selectedAvatars = selectedIds.map(id => {
+    const g = groupList.find(g => g.value === id)
+    return g ? g.avatar : ''
+  })
+  tagsDiv.innerHTML = selectedIds.map((id, si) => {
+    return `<span class="tag"><img class="tag-avatar" src="${escHtml(selectedAvatars[si])}" onerror="this.style.display='none'" loading="lazy"> ${escHtml(selectedLabels[si] || id)} <span class="rm" onclick="event.stopPropagation();removeGroup(${index},'${escHtml(id)}')">&times;</span></span>`
+  }).join('')
+}
+
+function selectGroup(index, value, checked) {
+  const item = configData.groupIntercept?.[index]
+  if (!item) return
+  if (!item.groupIds) item.groupIds = []
+  if (checked) {
+    if (!item.groupIds.includes(value)) item.groupIds.push(value)
+  } else {
+    item.groupIds = item.groupIds.filter(id => id !== value)
+  }
+  renderGroupSelect(index, item.groupIds)
+  const dd = document.getElementById(`groupDropdown${index}`)
+  if (dd) dd.style.display = 'block'
+  computeDirty()
+}
+
+function removeGroup(index, value) {
+  const item = configData.groupIntercept?.[index]
+  if (!item || !item.groupIds) return
+  item.groupIds = item.groupIds.filter(id => id !== value)
+  renderGroupSelect(index, item.groupIds)
+  computeDirty()
+}
+
+// 点击页面其他区域关闭所有群聊下拉
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.group-select-wrap')) {
+    document.querySelectorAll('.group-select-dropdown').forEach(el => { el.style.display = 'none' })
+  }
+})
+
+function addIntercept() {
+  if (!configData.groupIntercept) configData.groupIntercept = []
+  configData.groupIntercept.push({ botId:'', groupIds:[], prefixes:[] })
+  renderIntercepts(); computeDirty()
+}
+function removeIntercept(i) { configData.groupIntercept.splice(i,1); renderIntercepts(); computeDirty() }
+function updateIntercept(i, key, val) { if (configData.groupIntercept[i]) { configData.groupIntercept[i][key] = val; computeDirty() } }
+function updateInterceptArr(i, key, val) { if (configData.groupIntercept[i]) { configData.groupIntercept[i][key] = val; computeDirty() } }
+
+function renderTagArea(id, items, key) {
+  renderTagListIn(document.getElementById(id), items, (arr) => { configData[key] = arr; computeDirty() })
+}
+function renderTagListIn(el, items, onChange) {
+  const addFn = () => {
+    const input = el.querySelector('.tag-add-input')
+    if (!input || !input.value.trim()) return
+    const newArr = [...items, input.value.trim()]
+    onChange(newArr); renderTagListIn(el, newArr, onChange)
+  }
+  const removeFn = (idx) => {
+    const newArr = items.filter((_, i) => i !== idx)
+    onChange(newArr); renderTagListIn(el, newArr, onChange)
+  }
+  el.innerHTML = ''
+  items.forEach((v, i) => {
+    const span = document.createElement('span'); span.className = 'tag'
+    span.innerHTML = `${escHtml(String(v))} <span class="rm" data-idx="${i}">&times;</span>`
+    el.appendChild(span)
+  })
+  const wrap = document.createElement('span'); wrap.className = 'tag-input-wrap'
+  wrap.innerHTML = '<input class="tag-add-input" placeholder="添加..."><button class="btn btn-xs">+</button>'
+  el.appendChild(wrap)
+  el.querySelectorAll('.rm').forEach(el => { el.onclick = () => removeFn(Number(el.dataset.idx)) })
+  const btn = wrap.querySelector('button'), inp = wrap.querySelector('input')
+  btn.onclick = addFn; inp.onkeydown = (e) => { if (e.key==='Enter') { e.preventDefault(); addFn() } }
+}
+function renderTagList(id, items, onChange) { renderTagListIn(document.getElementById(id), items, onChange) }
+
+function renderPrefixes() {
+  const list = document.getElementById('prefixList')
+  const prefixMap = configData.gsuidBotPrefix || {}
+  const keys = Object.keys(prefixMap)
+  if (keys.length === 0) { list.innerHTML = '<p style="color:#aaa;font-size:12px;">暂无前缀规则</p>'; return }
+  list.innerHTML = keys.map(selfId => {
+    const item = prefixMap[selfId]
+    return `
+    <div class="sub-card">
+      <div class="sub-card-header">
+        <span class="sub-card-title">BOT: ${escHtml(selfId)}</span>
+        <button class="btn btn-danger btn-xs" onclick="removePrefix('${escHtml(selfId)}')">删</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+        <div class="form-row"><label>前缀</label><input type="text" value="${escHtml(item.prefix||'')}" onchange="updatePrefix('${escHtml(selfId)}','prefix',this.value)"></div>
+        <div class="form-row"><label>有前缀不插入</label><div class="toggle-wrap"><div class="toggle ${item.skipIfHasPrefix!==false?'on':''}" onclick="togglePrefix(this,'${escHtml(selfId)}')"></div></div></div>
+      </div>
+    </div>`
+  }).join('')
+}
+function togglePrefix(el, selfId) {
+  el.classList.toggle('on')
+  if (configData.gsuidBotPrefix[selfId]) configData.gsuidBotPrefix[selfId].skipIfHasPrefix = el.classList.contains('on')
+  computeDirty()
+}
+function addPrefix() {
+  const selfId = prompt('请输入BOT账号(self_id):')
+  if (!selfId || !selfId.trim()) return
+  if (!configData.gsuidBotPrefix) configData.gsuidBotPrefix = {}
+  configData.gsuidBotPrefix[selfId.trim()] = { prefix:'', skipIfHasPrefix:true, noPrefixCommands:[] }
+  renderPrefixes(); computeDirty()
+}
+function removePrefix(selfId) { delete configData.gsuidBotPrefix[selfId]; renderPrefixes(); computeDirty() }
+function updatePrefix(selfId, key, val) { if (configData.gsuidBotPrefix[selfId]) { configData.gsuidBotPrefix[selfId][key] = val; computeDirty() } }
+
+async function saveConfig() {
+  const body = {
+    pluginEnabled: isOn('pluginEnabled'),
+    enabledBots: isOn('enabledBotsAll') ? ['all'] : [...document.querySelectorAll('.bot-check:checked')].map(cb => cb.value),
+    servers: [{
+      name: document.getElementById('srvName').value || '',
+      address: document.getElementById('srvAddress').value || '',
+      enabled: true,
+      reconnectInterval: Number(document.getElementById('srvReconnectInterval').value) || 5,
+      maxReconnectAttempts: Number(document.getElementById('srvMaxReconnect').value) || 0,
+      accessToken: document.getElementById('srvToken').value || ''
+    }],
+    groupIntercept: configData.groupIntercept || [],
+    noMsgStart: configData.noMsgStart || [], noMsgInclude: configData.noMsgInclude || [],
+    noGroup: configData.noGroup || [], yesGroup: configData.yesGroup || [],
+    muteStop: isOn('muteStop'), ignoreOnlyReplyAt: isOn('ignoreOnlyReplyAt'),
+    tempMsgReport: isOn('tempMsgReport'),
+    disconnectToMaster: isOn('disconnectToMaster'), reconnectToMaster: isOn('reconnectToMaster'),
+    firstconnectToMaster: isOn('firstconnectToMaster'),
+    msgStoreTime: Number(document.getElementById('msgStoreTime').value) || 300,
+    taskQueue: Number(document.getElementById('taskQueue').value) || 0,
+    heartbeatInterval: Number(document.getElementById('heartbeatInterval').value) || 5,
+    gsuidBotPrefix: configData.gsuidBotPrefix || {},
+  }
+  try {
+    const res = await fetch(API('/gs-plugin/config'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    })
+    const json = await res.json()
+    if (json.ok) { showToast('已保存', 'success'); updateStatus(body.pluginEnabled); clearDirty() }
+    else { showToast('保存失败: ' + json.error, 'error') }
+  } catch(e) { showToast('保存失败: ' + e.message, 'error') }
+}
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+
+loadConfig()
+</script>
+</body>
+</html>
