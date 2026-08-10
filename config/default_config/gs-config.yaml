@@ -27,7 +27,7 @@ onlyReplyAt:
     - 示例前缀1
 # 连接服务列表
 # name: 连接名字  请保证每个名字都不相同,否则会出问题
-# address: 连接地址
+# address: 连接地址，格式: ws://IP:端口/ws/yunzai (如 ws://127.0.0.1:8765/ws/yunzai)
 # enabled: 连接开关，false 时断开此连接
 # reconnectInterval: 重连间隔 单位:秒
 # maxReconnectAttempts: 最大连接次数 0 为无限制
