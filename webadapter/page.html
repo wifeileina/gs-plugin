@@ -204,6 +204,8 @@ select { width: 140px; }
 .status-dot.off { background: #bbb; }
 .status-text { font-size: 11px; color: #888; }
 
+.addr-fixed { font-size: 13px; color: #6b7280; font-family: monospace; flex-shrink: 0; }
+
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
@@ -263,7 +265,7 @@ select { width: 140px; }
         <div class="section-title">🔗 GS连接设置</div>
         <div id="serverForm" style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;">
           <div class="form-row"><label>名称</label><input type="text" id="srvName" onchange="computeDirty()"></div>
-          <div class="form-row"><label>地址</label><input type="text" id="srvAddress" onchange="computeDirty()" style="width:100%;"></div>
+          <div class="form-row" style="grid-column:1/-1;"><label>地址</label><span class="addr-fixed">ws://</span><input type="text" id="srvHost" placeholder="127.0.0.1" onchange="computeDirty()" style="width:100px;"><span class="addr-fixed">:</span><input type="number" id="srvPort" placeholder="8765" min="1" max="65535" onchange="computeDirty()" style="width:70px;"><span class="addr-fixed">/ws/yunzai</span></div>
           <div class="form-row"><label>重连间隔</label><input type="number" id="srvReconnectInterval" min="0" onchange="computeDirty()"><span class="hint">秒</span></div>
           <div class="form-row"><label>最大重连</label><input type="number" id="srvMaxReconnect" min="0" onchange="computeDirty()"></div>
           <div class="form-row" style="grid-column:1/-1;"><label>Token</label><input type="text" id="srvToken" onchange="computeDirty()" style="width:100%;"></div>
@@ -344,7 +346,7 @@ function buildConfigBody() {
     enabledBots: isOn('enabledBotsAll') ? ['all'] : [...document.querySelectorAll('.bot-check:checked')].map(cb => cb.value),
     servers: [{
       name: document.getElementById('srvName').value || '',
-      address: document.getElementById('srvAddress').value || '',
+      address: buildAddress(),
       enabled: true,
       reconnectInterval: Number(document.getElementById('srvReconnectInterval').value) || 5,
       maxReconnectAttempts: Number(document.getElementById('srvMaxReconnect').value) || 0,
@@ -428,7 +430,9 @@ function renderAll() {
   // 单连接设置
   const srv = d.server || {}
   document.getElementById('srvName').value = srv.name || ''
-  document.getElementById('srvAddress').value = srv.address || ''
+  const addr = parseAddress(srv.address || '')
+  document.getElementById('srvHost').value = addr.host
+  document.getElementById('srvPort').value = addr.port
   document.getElementById('srvReconnectInterval').value = srv.reconnectInterval ?? 5
   document.getElementById('srvMaxReconnect').value = srv.maxReconnectAttempts ?? 0
   document.getElementById('srvToken').value = srv.accessToken || ''
@@ -702,7 +706,7 @@ async function saveConfig() {
     enabledBots: isOn('enabledBotsAll') ? ['all'] : [...document.querySelectorAll('.bot-check:checked')].map(cb => cb.value),
     servers: [{
       name: document.getElementById('srvName').value || '',
-      address: document.getElementById('srvAddress').value || '',
+      address: buildAddress(),
       enabled: true,
       reconnectInterval: Number(document.getElementById('srvReconnectInterval').value) || 5,
       maxReconnectAttempts: Number(document.getElementById('srvMaxReconnect').value) || 0,
@@ -731,6 +735,19 @@ async function saveConfig() {
 }
 
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+
+// 地址解析：从完整地址提取 IP 和端口
+function parseAddress(address) {
+  const match = String(address || '').match(/^ws:\/\/([^:/]+):(\d+)/)
+  if (match) return { host: match[1], port: match[2] }
+  return { host: '127.0.0.1', port: '8765' }
+}
+// 地址组合：将 IP 和端口拼接为完整 WebSocket 地址
+function buildAddress() {
+  const host = document.getElementById('srvHost').value.trim() || '127.0.0.1'
+  const port = document.getElementById('srvPort').value || '8765'
+  return `ws://${host}:${port}/ws/yunzai`
+}
 
 loadConfig()
 </script>

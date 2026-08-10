@@ -49,11 +49,28 @@ export function supportGuoba() {
           required: true
         },
         {
-          field: 'gs.serversAddress',
+          field: 'gs.serversHost',
           label: '连接地址',
-          bottomHelpMessage: 'GS 服务的 WebSocket 地址',
+          bottomHelpMessage: '仅填写 IP 地址，协议和路径已固定',
           component: 'Input',
-          required: true
+          required: true,
+          componentProps: {
+            addonBefore: 'ws://',
+            placeholder: '127.0.0.1'
+          }
+        },
+        {
+          field: 'gs.serversPort',
+          label: '服务端口',
+          bottomHelpMessage: '路径固定为 /ws/yunzai',
+          component: 'InputNumber',
+          required: true,
+          componentProps: {
+            min: 1,
+            max: 65535,
+            placeholder: '8765',
+            addonAfter: '/ws/yunzai'
+          }
         },
         {
           field: 'gs.serversReconnectInterval',
@@ -335,7 +352,9 @@ export function supportGuoba() {
         // 提取单连接设置
         const server = (Array.isArray(gs.servers) && gs.servers.length > 0) ? gs.servers[0] : {}
         gs.serversName = server.name || ''
-        gs.serversAddress = server.address || ''
+        const addrMatch = String(server.address || '').match(/^ws:\/\/([^:/]+):(\d+)/)
+        gs.serversHost = addrMatch ? addrMatch[1] : '127.0.0.1'
+        gs.serversPort = addrMatch ? Number(addrMatch[2]) : 8765
         gs.serversReconnectInterval = server.reconnectInterval ?? 5
         gs.serversMaxReconnectAttempts = server.maxReconnectAttempts ?? 0
         gs.serversAccessToken = server.accessToken || ''
@@ -356,11 +375,17 @@ export function supportGuoba() {
           delete data['gs.enabledBots']
         }
         // 合并单连接字段 → 写入 servers[0]
-        if ('gs.serversName' in data || 'gs.serversAddress' in data || 'gs.serversReconnectInterval' in data || 'gs.serversMaxReconnectAttempts' in data || 'gs.serversAccessToken' in data) {
+        if ('gs.serversName' in data || 'gs.serversHost' in data || 'gs.serversPort' in data || 'gs.serversReconnectInterval' in data || 'gs.serversMaxReconnectAttempts' in data || 'gs.serversAccessToken' in data) {
           const oldServer = (Array.isArray(config.servers) && config.servers.length > 0) ? config.servers[0] : {}
+          const oldAddr = String(oldServer.address || '')
+          const oldAddrMatch = oldAddr.match(/^ws:\/\/([^:/]+):(\d+)/)
+          const oldHost = oldAddrMatch ? oldAddrMatch[1] : '127.0.0.1'
+          const oldPort = oldAddrMatch ? oldAddrMatch[2] : '8765'
+          const host = data['gs.serversHost'] ?? oldHost
+          const port = data['gs.serversPort'] ?? oldPort
           const newServer = {
             name: data['gs.serversName'] ?? oldServer.name ?? '',
-            address: data['gs.serversAddress'] ?? oldServer.address ?? '',
+            address: `ws://${host}:${port}/ws/yunzai`,
             enabled: true,
             reconnectInterval: Number(data['gs.serversReconnectInterval'] ?? oldServer.reconnectInterval ?? 5),
             maxReconnectAttempts: Number(data['gs.serversMaxReconnectAttempts'] ?? oldServer.maxReconnectAttempts ?? 0),
@@ -370,7 +395,8 @@ export function supportGuoba() {
             Config.modify('gs-config', 'servers', [newServer])
           }
           delete data['gs.serversName']
-          delete data['gs.serversAddress']
+          delete data['gs.serversHost']
+          delete data['gs.serversPort']
           delete data['gs.serversReconnectInterval']
           delete data['gs.serversMaxReconnectAttempts']
           delete data['gs.serversAccessToken']
