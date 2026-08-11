@@ -140,33 +140,29 @@ export function supportGuoba() {
                 }
               },
               {
+                field: 'enabledBotsAll',
+                label: '转发全部BOT',
+                bottomHelpMessage: '开启后转发所有BOT的消息，无需手动指定',
+                component: 'Switch'
+              },
+              {
+                field: 'enabledBots',
+                label: '指定BOT',
+                bottomHelpMessage: '关闭"转发全部BOT"后生效，选择要转发消息的BOT',
+                component: 'Select',
+                componentProps: {
+                  mode: 'multiple',
+                  options: botList,
+                  placeholder: '请选择要启用的BOT'
+                }
+              },
+              {
                 field: 'accessToken',
                 label: '鉴权Token',
                 bottomHelpMessage: 'GS 服务需要鉴权时填写',
                 component: 'Input'
               }
             ]
-          }
-        },
-        {
-          component: 'Divider',
-          label: 'BOT分发'
-        },
-        {
-          field: 'gs.enabledBotsAll',
-          label: '转发全部BOT',
-          bottomHelpMessage: '开启后转发所有BOT的消息，无需手动指定',
-          component: 'Switch',
-        },
-        {
-          field: 'gs.enabledBots',
-          label: '指定BOT',
-          bottomHelpMessage: '关闭"转发全部BOT"后生效，选择要转发消息的BOT',
-          component: 'Select',
-          componentProps: {
-            mode: 'multiple',
-            options: botList,
-            placeholder: '请选择要启用的BOT'
           }
         },
         {
@@ -389,20 +385,11 @@ export function supportGuoba() {
         })
         // 确保 pluginEnabled 有默认值
         if (gs.pluginEnabled === undefined) gs.pluginEnabled = false
-        // 确保 enabledBots 有默认值
-        if (!gs.enabledBots || gs.enabledBots.length === 0) {
-          gs.enabledBots = ['all']
-        }
-        // 拆分 enabledBots：如果包含 'all' 则开关打开，否则展示具体列表
-        if (gs.enabledBots.includes('all')) {
-          gs.enabledBotsAll = true
-          gs.enabledBots = []
-        } else {
-          gs.enabledBotsAll = false
-        }
+        const fallbackEnabledBots = Array.isArray(gs.enabledBots) && gs.enabledBots.length > 0 ? gs.enabledBots : ['all']
         // 提取多连接设置
         gs.serversList = (Array.isArray(gs.servers) ? gs.servers : []).map(server => {
           const addr = parseAddress(server.address || '')
+          const enabledBots = Array.isArray(server.enabledBots) ? server.enabledBots : fallbackEnabledBots
           return {
             name: server.name || '',
             protocol: addr.protocol,
@@ -410,6 +397,8 @@ export function supportGuoba() {
             port: addr.port,
             path: addr.path,
             enabled: server.enabled === true,
+            enabledBotsAll: enabledBots.includes('all'),
+            enabledBots: enabledBots.includes('all') ? [] : enabledBots,
             reconnectInterval: server.reconnectInterval ?? 5,
             maxReconnectAttempts: server.maxReconnectAttempts ?? 0,
             accessToken: server.accessToken || ''
@@ -420,37 +409,34 @@ export function supportGuoba() {
       // 设置配置的方法（前端点确定后调用的方法）
       setConfigData(data, { Result }) {
         let config = Config.getCfg()
-        // 合并 enabledBotsAll + enabledBots → 写入 enabledBots
-        if ('gs.enabledBotsAll' in data || 'gs.enabledBots' in data) {
-          const all = data['gs.enabledBotsAll'] ?? config.enabledBots?.includes?.('all')
-          const bots = data['gs.enabledBots'] ?? (config.enabledBots?.filter?.(b => b !== 'all') || [])
-          const merged = all ? ['all'] : (Array.isArray(bots) ? bots : [])
-          if (!lodash.isEqual(config.enabledBots || [], merged)) {
-            Config.modify('gs-config', 'enabledBots', merged)
-          }
-          delete data['gs.enabledBotsAll']
-          delete data['gs.enabledBots']
-        }
         // 合并多连接字段 → 写入 servers
         if ('gs.serversList' in data) {
           const list = Array.isArray(data['gs.serversList']) ? data['gs.serversList'] : []
-          const servers = list.map(item => ({
-            name: String(item?.name || '').trim(),
-            address: buildAddress({
-              protocol: item?.protocol,
-              host: item?.host,
-              port: item?.port,
-              path: item?.path
-            }),
-            enabled: item?.enabled === true,
-            reconnectInterval: Number(item?.reconnectInterval ?? 5) || 5,
-            maxReconnectAttempts: Number(item?.maxReconnectAttempts ?? 0) || 0,
-            accessToken: String(item?.accessToken || '')
-          })).filter(server => server.name && server.address)
+          const servers = list.map(item => {
+            const enabledBots = item?.enabledBotsAll ? ['all'] : (Array.isArray(item?.enabledBots) ? item.enabledBots : [])
+            return {
+              name: String(item?.name || '').trim(),
+              address: buildAddress({
+                protocol: item?.protocol,
+                host: item?.host,
+                port: item?.port,
+                path: item?.path
+              }),
+              enabled: item?.enabled === true,
+              enabledBots,
+              reconnectInterval: Number(item?.reconnectInterval ?? 5) || 5,
+              maxReconnectAttempts: Number(item?.maxReconnectAttempts ?? 0) || 0,
+              accessToken: String(item?.accessToken || '')
+            }
+          }).filter(server => server.name && server.address)
           if (!lodash.isEqual(config.servers || [], servers)) {
             Config.modify('gs-config', 'servers', servers)
           }
           delete data['gs.serversList']
+        }
+        if ('gs.enabledBotsAll' in data || 'gs.enabledBots' in data) {
+          delete data['gs.enabledBotsAll']
+          delete data['gs.enabledBots']
         }
         for (const key in data) {
           let split = key.split('.')

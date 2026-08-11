@@ -23,18 +23,18 @@ export function init(ctx) {
     try {
       const cfg = Config.getDefOrConfig('gs-config')
       const bots = getBotList()
-      // 拆分 enabledBots 供前端展示
-      const enabledBots = cfg.enabledBots || []
-      const allBots = enabledBots.includes('all')
-      const specBots = allBots ? [] : enabledBots
-      const servers = Array.isArray(cfg.servers) ? cfg.servers.map(server => ({ ...server, enabled: server.enabled !== false })) : []
+      const globalEnabledBots = cfg.enabledBots || []
+      const servers = Array.isArray(cfg.servers) ? cfg.servers.map(server => ({
+        ...server,
+        enabled: server.enabled !== false,
+        enabledBots: Array.isArray(server.enabledBots) ? server.enabledBots : globalEnabledBots
+      })) : []
       res.json({
         ok: true,
         data: {
           pluginEnabled: cfg.pluginEnabled === true,
-          enabledBotsAll: allBots,
-          enabledBots: specBots,
           servers,
+          botList: bots,
           groupIntercept: cfg.groupIntercept || [],
           noMsgStart: cfg.noMsgStart || [],
           noMsgInclude: cfg.noMsgInclude || [],

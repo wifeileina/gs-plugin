@@ -1,6 +1,6 @@
 # 插件总开关
 # false 时关闭所有连接，不进行任何消息转发
-pluginEnabled: false
+pluginEnabled: true
 # 启用的BOT列表
 # ['all'] 转发所有BOT，也可指定具体BOT的self_id列表
 # 例如: ['2854xxxxxx', '3889xxxxxx']
@@ -10,7 +10,7 @@ enabledBots:
 # 0 为关闭心跳
 heartbeatInterval: 5
 # 是否忽略云崽配置文件的仅艾特
-ignoreOnlyReplyAt: false
+ignoreOnlyReplyAt: true
 # gsuid_core上报前缀（按bot账号单独配置）
 # 键为bot账号(self_id)，值为要拼接在消息最前面的前缀
 #   - prefix: 前缀内容
@@ -34,9 +34,9 @@ onlyReplyAt:
 # maxReconnectAttempts: 最大连接次数 0 为无限制
 # accessToken: 鉴权token
 servers:
-  - name: gs_name
+  - name: 卡提希娅
     address: ws://127.0.0.1:8765/ws/yunzai
-    enabled: false
+    enabled: true
     enabledBots:
       - all
     reconnectInterval: 5
@@ -60,7 +60,7 @@ noGroup: []
 # 白名单群聊
 yesGroup: []
 # 禁言拦截
-muteStop: false
+muteStop: true
 # 临时会话是否上报
 tempMsgReport: false
 # 不转发消息前缀
@@ -72,6 +72,10 @@ noMsgInclude: []
 # botId: bot账号(self_id)，可选，不填则对所有bot生效
 # groupIds: 要拦截的群聊ID列表
 # prefixes: 要拦截的消息前缀列表（会自动忽略前面的@提及）
-groupIntercept: []
+groupIntercept:
+  - groupIds:
+      - 711820611
+    prefixes:
+      - ww
 # 数据库同步锁
 taskQueue: 0

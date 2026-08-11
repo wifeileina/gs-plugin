@@ -207,10 +207,11 @@ select { width: 140px; }
 .addr-fixed { font-size: 13px; color: #6b7280; font-family: monospace; flex-shrink: 0; }
 .addr-row { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; }
 .addr-row select { width: 64px; }
-.addr-row .srv-host { width: 120px; }
+.addr-row .srv-host { width: 140px; }
 .addr-row .srv-port { width: 74px; }
-.addr-row .srv-path { flex: 1; min-width: 120px; width: auto; }
+.addr-row .srv-path { width: 150px; flex: 0 0 150px; }
 .server-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; }
+.server-address-row { grid-column: 1 / -1; }
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -273,20 +274,6 @@ select { width: 140px; }
         <button class="btn" onclick="addServer()" style="margin-top:4px;">+ 添加连接</button>
       </div>
 
-      <div class="card">
-        <div class="section-title">🤖 BOT分发</div>
-        <div class="form-row">
-          <label>全部转发</label>
-          <div class="toggle-wrap">
-            <div class="toggle" id="enabledBotsAll" onclick="toggle(this);toggleBotSelect()"></div>
-            <span class="hint">开启后转发所有BOT</span>
-          </div>
-        </div>
-        <div class="form-row" id="specBotRow">
-          <label>指定BOT</label>
-          <div id="botSelectArea"></div>
-        </div>
-      </div>
     </div>
 
     <div class="tab-panel" id="tab-ext">
@@ -344,7 +331,6 @@ let configData = {}, botList = [], originalBody = null
 function buildConfigBody() {
   return {
     pluginEnabled: isOn('pluginEnabled'),
-    enabledBots: isOn('enabledBotsAll') ? ['all'] : [...document.querySelectorAll('.bot-check:checked')].map(cb => cb.value),
     servers: buildServers(),
     groupIntercept: JSON.parse(JSON.stringify(configData.groupIntercept || [])),
     noMsgStart: JSON.parse(JSON.stringify(configData.noMsgStart || [])),
@@ -419,8 +405,6 @@ async function loadConfig() {
 function renderAll() {
   const d = configData
   setToggle('pluginEnabled', d.pluginEnabled); updateStatus(d.pluginEnabled)
-  setToggle('enabledBotsAll', d.enabledBotsAll)
-  renderBotSelect(); toggleBotSelect()
   renderServers()
   renderIntercepts()
   renderTagArea('noMsgStartTags', d.noMsgStart, 'noMsgStart')
@@ -445,18 +429,34 @@ function updateStatus(on) {
   else { dot.className = 'status-dot off'; label.textContent = '已关闭' }
 }
 
-function toggleBotSelect() {
-  document.getElementById('specBotRow').style.display = isOn('enabledBotsAll') ? 'none' : 'flex'
+function getServerEnabledBots(server) {
+  if (Array.isArray(server.enabledBots)) return server.enabledBots.map(String)
+  if (Array.isArray(configData.enabledBots) && configData.enabledBots.length > 0) return configData.enabledBots.map(String)
+  return ['all']
 }
-
-function renderBotSelect() {
-  const area = document.getElementById('botSelectArea')
-  if (botList.length === 0) { area.innerHTML = '<span class="hint">暂无已连接BOT</span>'; return }
-  const selected = configData.enabledBots || []
-  area.innerHTML = botList.map(b => {
-    const c = selected.includes(b.value) ? 'checked' : ''
-    return `<label style="margin-right:8px;font-size:12px;cursor:pointer;"><input type="checkbox" value="${b.value}" ${c} class="bot-check" onchange="computeDirty()"> ${escHtml(b.label)}</label>`
+function isServerAllBots(server) {
+  return getServerEnabledBots(server).includes('all')
+}
+function renderServerBotSelect(index, server) {
+  if (botList.length === 0) return '<span class="hint">暂无已连接BOT</span>'
+  const selected = getServerEnabledBots(server)
+  return botList.map(b => {
+    const c = selected.includes(String(b.value)) ? 'checked' : ''
+    return `<label style="margin-right:8px;font-size:12px;cursor:pointer;"><input type="checkbox" value="${escHtml(b.value)}" ${c} class="server-bot-check-${index}" onchange="toggleServerBot(${index},this)"> ${escHtml(b.label)}</label>`
   }).join('')
+}
+function toggleServerBotsAll(index, el) {
+  if (!configData.servers?.[index]) return
+  el.classList.toggle('on')
+  configData.servers[index].enabledBots = el.classList.contains('on') ? ['all'] : []
+  renderServers(); computeDirty()
+}
+function toggleServerBot(index, checkbox) {
+  const server = configData.servers?.[index]
+  if (!server) return
+  const selected = [...document.querySelectorAll(`.server-bot-check-${index}:checked`)].map(cb => cb.value)
+  server.enabledBots = selected
+  computeDirty()
 }
 
 function renderServers() {
@@ -476,14 +476,17 @@ function renderServers() {
         </div>
         <div class="server-grid">
           <div class="form-row"><label>名称</label><input type="text" value="${escHtml(srv.name || '')}" onchange="updateServer(${i},'name',this.value)"></div>
-          <div class="form-row"><label>地址</label><div class="addr-row">
+          <div class="form-row server-address-row"><label>地址</label><div class="addr-row">
             <select onchange="updateServerAddr(${i},'protocol',this.value)"><option value="ws" ${addr.protocol === 'ws' ? 'selected' : ''}>ws</option><option value="wss" ${addr.protocol === 'wss' ? 'selected' : ''}>wss</option></select>
             <span class="addr-fixed">://</span><input class="srv-host" type="text" value="${escHtml(addr.host)}" placeholder="127.0.0.1" onchange="updateServerAddr(${i},'host',this.value)">
             <span class="addr-fixed">:</span><input class="srv-port" type="number" value="${escHtml(addr.port)}" min="1" max="65535" onchange="updateServerAddr(${i},'port',this.value)">
+            <input class="srv-path" type="text" value="${escHtml(addr.path)}" placeholder="/ws/yunzai" onchange="updateServerAddr(${i},'path',this.value)">
+            <span class="hint">路径，例: /ws/yunzai</span>
           </div></div>
-          <div class="form-row" style="grid-column:1/-1;"><label>路径</label><input class="srv-path" type="text" value="${escHtml(addr.path)}" placeholder="/ws/yunzai" onchange="updateServerAddr(${i},'path',this.value)" style="width:100%;"><span class="hint">例: /ws/yunzai</span></div>
           <div class="form-row"><label>重连间隔</label><input type="number" min="0" value="${Number(srv.reconnectInterval ?? 5)}" onchange="updateServer(${i},'reconnectInterval',Number(this.value)||5)"><span class="hint">秒</span></div>
           <div class="form-row"><label>最大重连</label><input type="number" min="0" value="${Number(srv.maxReconnectAttempts ?? 0)}" onchange="updateServer(${i},'maxReconnectAttempts',Number(this.value)||0)"></div>
+          <div class="form-row"><label>全部BOT</label><div class="toggle-wrap"><div class="toggle ${isServerAllBots(srv) ? 'on' : ''}" onclick="toggleServerBotsAll(${i},this)"></div><span class="hint">此连接转发所有BOT</span></div></div>
+          <div class="form-row" style="grid-column:1/-1;display:${isServerAllBots(srv) ? 'none' : 'flex'};"><label>指定BOT</label><div>${renderServerBotSelect(i, srv)}</div></div>
           <div class="form-row" style="grid-column:1/-1;"><label>Token</label><input type="text" value="${escHtml(srv.accessToken || '')}" onchange="updateServer(${i},'accessToken',this.value)" style="width:100%;"></div>
         </div>
       </div>
@@ -492,7 +495,7 @@ function renderServers() {
 }
 
 function createDefaultServer() {
-  return { name: 'gs_name', address: 'ws://127.0.0.1:8765/ws/yunzai', enabled: false, reconnectInterval: 5, maxReconnectAttempts: 0, accessToken: '' }
+  return { name: 'gs_name', address: 'ws://127.0.0.1:8765/ws/yunzai', enabled: false, enabledBots: ['all'], reconnectInterval: 5, maxReconnectAttempts: 0, accessToken: '' }
 }
 function updateServer(index, key, value) {
   if (!configData.servers?.[index]) return
@@ -528,6 +531,7 @@ function buildServers() {
     name: server.name || '',
     address: normalizeAddress(server.address || ''),
     enabled: server.enabled !== false,
+    enabledBots: getServerEnabledBots(server),
     reconnectInterval: Number(server.reconnectInterval) || 5,
     maxReconnectAttempts: Number(server.maxReconnectAttempts) || 0,
     accessToken: server.accessToken || ''
@@ -762,22 +766,7 @@ function removePrefix(selfId) { delete configData.gsuidBotPrefix[selfId]; render
 function updatePrefix(selfId, key, val) { if (configData.gsuidBotPrefix[selfId]) { configData.gsuidBotPrefix[selfId][key] = val; computeDirty() } }
 
 async function saveConfig() {
-  const body = {
-    pluginEnabled: isOn('pluginEnabled'),
-    enabledBots: isOn('enabledBotsAll') ? ['all'] : [...document.querySelectorAll('.bot-check:checked')].map(cb => cb.value),
-    servers: buildServers(),
-    groupIntercept: configData.groupIntercept || [],
-    noMsgStart: configData.noMsgStart || [], noMsgInclude: configData.noMsgInclude || [],
-    noGroup: configData.noGroup || [], yesGroup: configData.yesGroup || [],
-    muteStop: isOn('muteStop'), ignoreOnlyReplyAt: isOn('ignoreOnlyReplyAt'),
-    tempMsgReport: isOn('tempMsgReport'),
-    disconnectToMaster: isOn('disconnectToMaster'), reconnectToMaster: isOn('reconnectToMaster'),
-    firstconnectToMaster: isOn('firstconnectToMaster'),
-    msgStoreTime: Number(document.getElementById('msgStoreTime').value) || 300,
-    taskQueue: Number(document.getElementById('taskQueue').value) || 0,
-    heartbeatInterval: Number(document.getElementById('heartbeatInterval').value) || 5,
-    gsuidBotPrefix: configData.gsuidBotPrefix || {},
-  }
+  const body = buildConfigBody()
   try {
     const res = await fetch(API('/gs-plugin/config'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)

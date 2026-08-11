@@ -79,9 +79,14 @@ function getBotList () {
  * 为一个服务器创建所有启用 bot 的 WebSocket 连接
  */
 async function _createBotConnections (server) {
-  const enabledBots = Config.enabledBots
+  let enabledBots
+  if (Array.isArray(server.enabledBots)) {
+    enabledBots = server.enabledBots
+  } else {
+    enabledBots = Config.enabledBots
+  }
   if (!enabledBots || enabledBots.length === 0) {
-    logger.mark('[gs-plugin] 未配置启用的BOT，跳过连接')
+    logger.mark(`[gs-plugin] ${server.name} 未配置启用的BOT，跳过连接`)
     return
   }
   for (const botId of enabledBots) {
