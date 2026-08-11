@@ -27,16 +27,14 @@ export function init(ctx) {
       const enabledBots = cfg.enabledBots || []
       const allBots = enabledBots.includes('all')
       const specBots = allBots ? [] : enabledBots
-      // 取第一个连接作为单连接
-      const servers = cfg.servers || []
-      const server = servers.length > 0 ? { ...servers[0], enabled: servers[0].enabled !== false } : null
+      const servers = Array.isArray(cfg.servers) ? cfg.servers.map(server => ({ ...server, enabled: server.enabled !== false })) : []
       res.json({
         ok: true,
         data: {
-          pluginEnabled: cfg.pluginEnabled !== false,
+          pluginEnabled: cfg.pluginEnabled === true,
           enabledBotsAll: allBots,
           enabledBots: specBots,
-          server,
+          servers,
           groupIntercept: cfg.groupIntercept || [],
           noMsgStart: cfg.noMsgStart || [],
           noMsgInclude: cfg.noMsgInclude || [],

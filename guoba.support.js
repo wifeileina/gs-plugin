@@ -1,6 +1,21 @@
 import lodash from 'lodash'
 import { Config, getBotList } from './components/index.js'
 
+function parseAddress(address) {
+  const match = String(address || '').match(/^(wss?):\/\/([^:/]+):(\d+)(\/.*)?$/)
+  if (match) return { protocol: match[1], host: match[2], port: Number(match[3]), path: match[4] || '/ws/yunzai' }
+  return { protocol: 'ws', host: '127.0.0.1', port: 8765, path: '/ws/yunzai' }
+}
+
+function buildAddress({ protocol, host, port, path }) {
+  const safeProtocol = protocol === 'wss' ? 'wss' : 'ws'
+  const safeHost = String(host || '127.0.0.1').trim()
+  const safePort = Number(port) || 8765
+  let safePath = String(path || '/ws/yunzai').trim()
+  if (!safePath.startsWith('/')) safePath = `/${safePath}`
+  return `${safeProtocol}://${safeHost}:${safePort}${safePath}`
+}
+
 // 支持锅巴
 export function supportGuoba() {
   let groupList = Array.from(Bot.gl.values())
@@ -42,60 +57,96 @@ export function supportGuoba() {
           label: 'GS连接设置'
         },
         {
-          field: 'gs.serversName',
-          label: '连接名字',
-          bottomHelpMessage: '连接的名称标识',
-          component: 'Input',
-          required: true
-        },
-        {
-          field: 'gs.serversHost',
-          label: '连接地址',
-          bottomHelpMessage: '仅填写 IP 地址，协议和路径已固定',
-          component: 'Input',
-          required: true,
+          field: 'gs.serversList',
+          label: '连接列表',
+          bottomHelpMessage: '支持多个 GS 连接；完整地址会保存为 协议://IP:端口/路径，例如 ws://127.0.0.1:8765/ws/yunzai',
+          component: 'GSubForm',
           componentProps: {
-            addonBefore: 'ws://',
-            placeholder: '127.0.0.1'
+            multiple: true,
+            schemas: [
+              {
+                field: 'name',
+                label: '连接名字',
+                component: 'Input',
+                required: true
+              },
+              {
+                field: 'protocol',
+                label: '协议',
+                component: 'Select',
+                required: true,
+                componentProps: {
+                  options: [
+                    { label: 'ws', value: 'ws' },
+                    { label: 'wss', value: 'wss' }
+                  ]
+                }
+              },
+              {
+                field: 'host',
+                label: '连接地址',
+                component: 'Input',
+                required: true,
+                componentProps: {
+                  placeholder: '127.0.0.1'
+                }
+              },
+              {
+                field: 'port',
+                label: '服务端口',
+                component: 'InputNumber',
+                required: true,
+                componentProps: {
+                  min: 1,
+                  max: 65535,
+                  placeholder: '8765'
+                }
+              },
+              {
+                field: 'path',
+                label: '连接路径',
+                bottomHelpMessage: '例如 /ws/yunzai，可按 bot 或服务端配置填写不同路径',
+                component: 'Input',
+                required: true,
+                componentProps: {
+                  placeholder: '/ws/yunzai'
+                }
+              },
+              {
+                field: 'enabled',
+                label: '启用连接',
+                component: 'Switch',
+                componentProps: {
+                  defaultValue: false
+                }
+              },
+              {
+                field: 'reconnectInterval',
+                label: '重连间隔',
+                component: 'InputNumber',
+                required: true,
+                componentProps: {
+                  addonAfter: '秒'
+                }
+              },
+              {
+                field: 'maxReconnectAttempts',
+                label: '最大连接次数',
+                bottomHelpMessage: '0 为无限制',
+                component: 'InputNumber',
+                required: true,
+                componentProps: {
+                  addonAfter: '次'
+                }
+              },
+              {
+                field: 'accessToken',
+                label: '鉴权Token',
+                bottomHelpMessage: 'GS 服务需要鉴权时填写',
+                component: 'Input'
+              }
+            ]
           }
-        },
-        {
-          field: 'gs.serversPort',
-          label: '服务端口',
-          bottomHelpMessage: '路径固定为 /ws/yunzai',
-          component: 'InputNumber',
-          required: true,
-          componentProps: {
-            min: 1,
-            max: 65535,
-            placeholder: '8765',
-            addonAfter: '/ws/yunzai'
-          }
-        },
-        {
-          field: 'gs.serversReconnectInterval',
-          label: '重连间隔',
-          component: 'InputNumber',
-          required: true,
-          componentProps: {
-            addonAfter: '秒'
-          }
-        },
-        {
-          field: 'gs.serversMaxReconnectAttempts',
-          label: '最大连接次数',
-          bottomHelpMessage: '0 为无限制',
-          component: 'InputNumber',
-          required: true,
-          componentProps: {
-            addonAfter: '次'
-          }
-        },
-        {
-          field: 'gs.serversAccessToken',
-          label: '鉴权Token',
-          bottomHelpMessage: 'GS 服务需要鉴权时填写',
-          component: 'Input',
         },
         {
           component: 'Divider',
@@ -337,7 +388,7 @@ export function supportGuoba() {
           }
         })
         // 确保 pluginEnabled 有默认值
-        if (gs.pluginEnabled === undefined) gs.pluginEnabled = true
+        if (gs.pluginEnabled === undefined) gs.pluginEnabled = false
         // 确保 enabledBots 有默认值
         if (!gs.enabledBots || gs.enabledBots.length === 0) {
           gs.enabledBots = ['all']
@@ -349,15 +400,21 @@ export function supportGuoba() {
         } else {
           gs.enabledBotsAll = false
         }
-        // 提取单连接设置
-        const server = (Array.isArray(gs.servers) && gs.servers.length > 0) ? gs.servers[0] : {}
-        gs.serversName = server.name || ''
-        const addrMatch = String(server.address || '').match(/^ws:\/\/([^:/]+):(\d+)/)
-        gs.serversHost = addrMatch ? addrMatch[1] : '127.0.0.1'
-        gs.serversPort = addrMatch ? Number(addrMatch[2]) : 8765
-        gs.serversReconnectInterval = server.reconnectInterval ?? 5
-        gs.serversMaxReconnectAttempts = server.maxReconnectAttempts ?? 0
-        gs.serversAccessToken = server.accessToken || ''
+        // 提取多连接设置
+        gs.serversList = (Array.isArray(gs.servers) ? gs.servers : []).map(server => {
+          const addr = parseAddress(server.address || '')
+          return {
+            name: server.name || '',
+            protocol: addr.protocol,
+            host: addr.host,
+            port: addr.port,
+            path: addr.path,
+            enabled: server.enabled === true,
+            reconnectInterval: server.reconnectInterval ?? 5,
+            maxReconnectAttempts: server.maxReconnectAttempts ?? 0,
+            accessToken: server.accessToken || ''
+          }
+        })
         return { gs }
       },
       // 设置配置的方法（前端点确定后调用的方法）
@@ -374,32 +431,26 @@ export function supportGuoba() {
           delete data['gs.enabledBotsAll']
           delete data['gs.enabledBots']
         }
-        // 合并单连接字段 → 写入 servers[0]
-        if ('gs.serversName' in data || 'gs.serversHost' in data || 'gs.serversPort' in data || 'gs.serversReconnectInterval' in data || 'gs.serversMaxReconnectAttempts' in data || 'gs.serversAccessToken' in data) {
-          const oldServer = (Array.isArray(config.servers) && config.servers.length > 0) ? config.servers[0] : {}
-          const oldAddr = String(oldServer.address || '')
-          const oldAddrMatch = oldAddr.match(/^ws:\/\/([^:/]+):(\d+)/)
-          const oldHost = oldAddrMatch ? oldAddrMatch[1] : '127.0.0.1'
-          const oldPort = oldAddrMatch ? oldAddrMatch[2] : '8765'
-          const host = data['gs.serversHost'] ?? oldHost
-          const port = data['gs.serversPort'] ?? oldPort
-          const newServer = {
-            name: data['gs.serversName'] ?? oldServer.name ?? '',
-            address: `ws://${host}:${port}/ws/yunzai`,
-            enabled: true,
-            reconnectInterval: Number(data['gs.serversReconnectInterval'] ?? oldServer.reconnectInterval ?? 5),
-            maxReconnectAttempts: Number(data['gs.serversMaxReconnectAttempts'] ?? oldServer.maxReconnectAttempts ?? 0),
-            accessToken: data['gs.serversAccessToken'] ?? oldServer.accessToken ?? ''
+        // 合并多连接字段 → 写入 servers
+        if ('gs.serversList' in data) {
+          const list = Array.isArray(data['gs.serversList']) ? data['gs.serversList'] : []
+          const servers = list.map(item => ({
+            name: String(item?.name || '').trim(),
+            address: buildAddress({
+              protocol: item?.protocol,
+              host: item?.host,
+              port: item?.port,
+              path: item?.path
+            }),
+            enabled: item?.enabled === true,
+            reconnectInterval: Number(item?.reconnectInterval ?? 5) || 5,
+            maxReconnectAttempts: Number(item?.maxReconnectAttempts ?? 0) || 0,
+            accessToken: String(item?.accessToken || '')
+          })).filter(server => server.name && server.address)
+          if (!lodash.isEqual(config.servers || [], servers)) {
+            Config.modify('gs-config', 'servers', servers)
           }
-          if (!lodash.isEqual(config.servers?.[0], newServer)) {
-            Config.modify('gs-config', 'servers', [newServer])
-          }
-          delete data['gs.serversName']
-          delete data['gs.serversHost']
-          delete data['gs.serversPort']
-          delete data['gs.serversReconnectInterval']
-          delete data['gs.serversMaxReconnectAttempts']
-          delete data['gs.serversAccessToken']
+          delete data['gs.serversList']
         }
         for (const key in data) {
           let split = key.split('.')

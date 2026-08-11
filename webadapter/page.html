@@ -205,6 +205,12 @@ select { width: 140px; }
 .status-text { font-size: 11px; color: #888; }
 
 .addr-fixed { font-size: 13px; color: #6b7280; font-family: monospace; flex-shrink: 0; }
+.addr-row { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; }
+.addr-row select { width: 64px; }
+.addr-row .srv-host { width: 120px; }
+.addr-row .srv-port { width: 74px; }
+.addr-row .srv-path { flex: 1; min-width: 120px; width: auto; }
+.server-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; }
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -263,13 +269,8 @@ select { width: 140px; }
 
       <div class="card">
         <div class="section-title">🔗 GS连接设置</div>
-        <div id="serverForm" style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;">
-          <div class="form-row"><label>名称</label><input type="text" id="srvName" onchange="computeDirty()"></div>
-          <div class="form-row" style="grid-column:1/-1;"><label>地址</label><span class="addr-fixed">ws://</span><input type="text" id="srvHost" placeholder="127.0.0.1" onchange="computeDirty()" style="width:100px;"><span class="addr-fixed">:</span><input type="number" id="srvPort" placeholder="8765" min="1" max="65535" onchange="computeDirty()" style="width:70px;"><span class="addr-fixed">/ws/yunzai</span></div>
-          <div class="form-row"><label>重连间隔</label><input type="number" id="srvReconnectInterval" min="0" onchange="computeDirty()"><span class="hint">秒</span></div>
-          <div class="form-row"><label>最大重连</label><input type="number" id="srvMaxReconnect" min="0" onchange="computeDirty()"></div>
-          <div class="form-row" style="grid-column:1/-1;"><label>Token</label><input type="text" id="srvToken" onchange="computeDirty()" style="width:100%;"></div>
-        </div>
+        <div id="serverList"></div>
+        <button class="btn" onclick="addServer()" style="margin-top:4px;">+ 添加连接</button>
       </div>
 
       <div class="card">
@@ -344,14 +345,7 @@ function buildConfigBody() {
   return {
     pluginEnabled: isOn('pluginEnabled'),
     enabledBots: isOn('enabledBotsAll') ? ['all'] : [...document.querySelectorAll('.bot-check:checked')].map(cb => cb.value),
-    servers: [{
-      name: document.getElementById('srvName').value || '',
-      address: buildAddress(),
-      enabled: true,
-      reconnectInterval: Number(document.getElementById('srvReconnectInterval').value) || 5,
-      maxReconnectAttempts: Number(document.getElementById('srvMaxReconnect').value) || 0,
-      accessToken: document.getElementById('srvToken').value || ''
-    }],
+    servers: buildServers(),
     groupIntercept: JSON.parse(JSON.stringify(configData.groupIntercept || [])),
     noMsgStart: JSON.parse(JSON.stringify(configData.noMsgStart || [])),
     noMsgInclude: JSON.parse(JSON.stringify(configData.noMsgInclude || [])),
@@ -427,15 +421,7 @@ function renderAll() {
   setToggle('pluginEnabled', d.pluginEnabled); updateStatus(d.pluginEnabled)
   setToggle('enabledBotsAll', d.enabledBotsAll)
   renderBotSelect(); toggleBotSelect()
-  // 单连接设置
-  const srv = d.server || {}
-  document.getElementById('srvName').value = srv.name || ''
-  const addr = parseAddress(srv.address || '')
-  document.getElementById('srvHost').value = addr.host
-  document.getElementById('srvPort').value = addr.port
-  document.getElementById('srvReconnectInterval').value = srv.reconnectInterval ?? 5
-  document.getElementById('srvMaxReconnect').value = srv.maxReconnectAttempts ?? 0
-  document.getElementById('srvToken').value = srv.accessToken || ''
+  renderServers()
   renderIntercepts()
   renderTagArea('noMsgStartTags', d.noMsgStart, 'noMsgStart')
   renderTagArea('noMsgIncludeTags', d.noMsgInclude, 'noMsgInclude')
@@ -471,6 +457,81 @@ function renderBotSelect() {
     const c = selected.includes(b.value) ? 'checked' : ''
     return `<label style="margin-right:8px;font-size:12px;cursor:pointer;"><input type="checkbox" value="${b.value}" ${c} class="bot-check" onchange="computeDirty()"> ${escHtml(b.label)}</label>`
   }).join('')
+}
+
+function renderServers() {
+  const list = document.getElementById('serverList')
+  if (!Array.isArray(configData.servers)) configData.servers = []
+  if (configData.servers.length === 0) configData.servers.push(createDefaultServer())
+  list.innerHTML = configData.servers.map((srv, i) => {
+    const addr = parseAddress(srv.address || '')
+    return `
+      <div class="sub-card">
+        <div class="sub-card-header">
+          <span class="sub-card-title">连接 #${i + 1}</span>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="hint">启用</span><div class="toggle ${srv.enabled !== false ? 'on' : ''}" onclick="toggleServerEnabled(${i},this)"></div>
+            <button class="btn btn-danger btn-xs" onclick="removeServer(${i})">删</button>
+          </div>
+        </div>
+        <div class="server-grid">
+          <div class="form-row"><label>名称</label><input type="text" value="${escHtml(srv.name || '')}" onchange="updateServer(${i},'name',this.value)"></div>
+          <div class="form-row"><label>地址</label><div class="addr-row">
+            <select onchange="updateServerAddr(${i},'protocol',this.value)"><option value="ws" ${addr.protocol === 'ws' ? 'selected' : ''}>ws</option><option value="wss" ${addr.protocol === 'wss' ? 'selected' : ''}>wss</option></select>
+            <span class="addr-fixed">://</span><input class="srv-host" type="text" value="${escHtml(addr.host)}" placeholder="127.0.0.1" onchange="updateServerAddr(${i},'host',this.value)">
+            <span class="addr-fixed">:</span><input class="srv-port" type="number" value="${escHtml(addr.port)}" min="1" max="65535" onchange="updateServerAddr(${i},'port',this.value)">
+          </div></div>
+          <div class="form-row" style="grid-column:1/-1;"><label>路径</label><input class="srv-path" type="text" value="${escHtml(addr.path)}" placeholder="/ws/yunzai" onchange="updateServerAddr(${i},'path',this.value)" style="width:100%;"><span class="hint">例: /ws/yunzai</span></div>
+          <div class="form-row"><label>重连间隔</label><input type="number" min="0" value="${Number(srv.reconnectInterval ?? 5)}" onchange="updateServer(${i},'reconnectInterval',Number(this.value)||5)"><span class="hint">秒</span></div>
+          <div class="form-row"><label>最大重连</label><input type="number" min="0" value="${Number(srv.maxReconnectAttempts ?? 0)}" onchange="updateServer(${i},'maxReconnectAttempts',Number(this.value)||0)"></div>
+          <div class="form-row" style="grid-column:1/-1;"><label>Token</label><input type="text" value="${escHtml(srv.accessToken || '')}" onchange="updateServer(${i},'accessToken',this.value)" style="width:100%;"></div>
+        </div>
+      </div>
+    `
+  }).join('')
+}
+
+function createDefaultServer() {
+  return { name: 'gs_name', address: 'ws://127.0.0.1:8765/ws/yunzai', enabled: false, reconnectInterval: 5, maxReconnectAttempts: 0, accessToken: '' }
+}
+function updateServer(index, key, value) {
+  if (!configData.servers?.[index]) return
+  configData.servers[index][key] = value
+  computeDirty()
+}
+function toggleServerEnabled(index, el) {
+  if (!configData.servers?.[index]) return
+  el.classList.toggle('on')
+  configData.servers[index].enabled = el.classList.contains('on')
+  computeDirty()
+}
+function addServer() {
+  if (!Array.isArray(configData.servers)) configData.servers = []
+  configData.servers.push(createDefaultServer())
+  renderServers(); computeDirty()
+}
+function removeServer(index) {
+  if (!Array.isArray(configData.servers)) return
+  configData.servers.splice(index, 1)
+  renderServers(); computeDirty()
+}
+function updateServerAddr(index, key, value) {
+  const server = configData.servers?.[index]
+  if (!server) return
+  const addr = parseAddress(server.address || '')
+  addr[key] = value
+  server.address = buildAddress(addr)
+  computeDirty()
+}
+function buildServers() {
+  return JSON.parse(JSON.stringify(configData.servers || [])).map(server => ({
+    name: server.name || '',
+    address: normalizeAddress(server.address || ''),
+    enabled: server.enabled !== false,
+    reconnectInterval: Number(server.reconnectInterval) || 5,
+    maxReconnectAttempts: Number(server.maxReconnectAttempts) || 0,
+    accessToken: server.accessToken || ''
+  }))
 }
 
 function renderIntercepts() {
@@ -704,14 +765,7 @@ async function saveConfig() {
   const body = {
     pluginEnabled: isOn('pluginEnabled'),
     enabledBots: isOn('enabledBotsAll') ? ['all'] : [...document.querySelectorAll('.bot-check:checked')].map(cb => cb.value),
-    servers: [{
-      name: document.getElementById('srvName').value || '',
-      address: buildAddress(),
-      enabled: true,
-      reconnectInterval: Number(document.getElementById('srvReconnectInterval').value) || 5,
-      maxReconnectAttempts: Number(document.getElementById('srvMaxReconnect').value) || 0,
-      accessToken: document.getElementById('srvToken').value || ''
-    }],
+    servers: buildServers(),
     groupIntercept: configData.groupIntercept || [],
     noMsgStart: configData.noMsgStart || [], noMsgInclude: configData.noMsgInclude || [],
     noGroup: configData.noGroup || [], yesGroup: configData.yesGroup || [],
@@ -736,17 +790,22 @@ async function saveConfig() {
 
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
 
-// 地址解析：从完整地址提取 IP 和端口
+// 地址解析：从完整地址提取协议、主机、端口和路径
 function parseAddress(address) {
-  const match = String(address || '').match(/^ws:\/\/([^:/]+):(\d+)/)
-  if (match) return { host: match[1], port: match[2] }
-  return { host: '127.0.0.1', port: '8765' }
+  const match = String(address || '').match(/^(wss?):\/\/([^:/]+):(\d+)(\/.*)?$/)
+  if (match) return { protocol: match[1], host: match[2], port: match[3], path: match[4] || '/ws/yunzai' }
+  return { protocol: 'ws', host: '127.0.0.1', port: '8765', path: '/ws/yunzai' }
 }
-// 地址组合：将 IP 和端口拼接为完整 WebSocket 地址
-function buildAddress() {
-  const host = document.getElementById('srvHost').value.trim() || '127.0.0.1'
-  const port = document.getElementById('srvPort').value || '8765'
-  return `ws://${host}:${port}/ws/yunzai`
+function buildAddress(addr) {
+  const protocol = addr.protocol === 'wss' ? 'wss' : 'ws'
+  const host = String(addr.host || '127.0.0.1').trim()
+  const port = String(addr.port || '8765').trim()
+  let path = String(addr.path || '/ws/yunzai').trim()
+  if (!path.startsWith('/')) path = `/${path}`
+  return `${protocol}://${host}:${port}${path}`
+}
+function normalizeAddress(address) {
+  return buildAddress(parseAddress(address))
 }
 
 loadConfig()

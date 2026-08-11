@@ -200,30 +200,13 @@ class Config {
               continue
             }
             const arr = key.split('.')
+            if (key === 'servers' || arr[0] === 'servers') {
+              logger.mark('[gs-plugin] 连接配置已变更，重新初始化所有连接')
+              clearWebSocket()
+              await initWebSocket()
+              continue
+            }
             if (arr[0] !== 'servers') continue
-            let data = newConfig.servers[arr[1]]
-            if (typeof data === 'undefined') data = oldConfig.servers[arr[1]]
-            const target = {
-              type: null,
-              data
-            }
-            if (typeof value.newValue === 'object' && typeof value.oldValue === 'undefined') {
-              target.type = 'add'
-            } else if (typeof value.newValue === 'undefined' && typeof value.oldValue === 'object') {
-              target.type = 'del'
-            } else if (arr[2] === 'enabled') {
-              // enabled 字段：true 开启连接，false 关闭连接
-              if (value.newValue === true) {
-                target.type = 'open'
-              } else if (value.newValue === false) {
-                target.type = 'close'
-              }
-            } else if (value.newValue === true && (value.oldValue === false || typeof value.oldValue === 'undefined')) {
-              target.type = 'close'
-            } else if (value.newValue === false && (value.oldValue === true || typeof value.oldValue === 'undefined')) {
-              target.type = 'open'
-            }
-            await modifyWebSocket(target)
           }
         }
       }
