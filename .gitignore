@@ -1,4 +1,5 @@
 node_modules/
 model/db/data.db
+config/config/*.yaml
 *.log
 .DS_Store
