@@ -67,7 +67,6 @@ gsuidBotPrefix:
     prefix: "cmd"          # 前缀内容
     skipIfHasPrefix: true  # 已有前缀时跳过（默认 true）
     noPrefixCommands:      # 不加前缀的命令白名单
-      - "扫码登陆"
 
 # ── 通知主人 ──
 disconnectToMaster: false   # 断开时通知主人
