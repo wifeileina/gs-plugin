@@ -56,7 +56,9 @@ firstconnectToMaster: false
 # 大于0: 通知指定顺序的主人
 howToMaster: 0
 # 禁用群聊列表
-noGroup: []
+noGroup:
+  - 1102448154
+  - 277045897
 # 白名单群聊
 yesGroup: []
 # 禁言拦截

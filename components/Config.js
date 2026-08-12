@@ -206,7 +206,9 @@ class Config {
               await initWebSocket()
               continue
             }
-            if (arr[0] !== 'servers') continue
+            // 其他配置项（黑名单、白名单、前缀拦截等）运行时读取，即时生效
+            logger.mark(`[gs-plugin] 配置项 ${key} 已更新，即时生效`)
+            continue
           }
         }
       }
@@ -221,9 +223,14 @@ class Config {
 
   modify (name, key, value, type = 'config') {
     let path = `${Plugin_Path}/config/${type}/${name}.yaml`
+    // 写入前确保 oldConfig 保存的是修改前的完整快照
+    const configKey = `${type}.${name}`
+    if (this.config[configKey] && !this.oldConfig[configKey]) {
+      this.oldConfig[configKey] = _.cloneDeep(this.config[configKey])
+    }
     new YamlReader(path).set(key, value)
-    this.oldConfig[key] = _.cloneDeep(this.config[key])
-    delete this.config[`${type}.${name}`]
+    // 清除缓存，下次读取时从文件重新加载
+    delete this.config[configKey]
   }
 
   modifyarr (name, key, value, category = 'add', type = 'config') {
