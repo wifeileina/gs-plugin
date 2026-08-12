@@ -14,6 +14,14 @@
 
 ## 安装
 
+```
+#GitHub
+git clone https://github.com/wifeileina/gs-plugin.git ./plugins/gs-plugin/
+```
+```
+#gitee（更新不及时）
+git clone https://gitee.com/Ileina/gs-plugin.git ./plugins/gs-plugin/
+```
 将 `gs-plugin` 文件夹放入 `TRSS-Yunzai/plugins/` 目录下：
 
 ```
@@ -67,7 +75,6 @@ gsuidBotPrefix:
     prefix: "cmd"          # 前缀内容
     skipIfHasPrefix: true  # 已有前缀时跳过（默认 true）
     noPrefixCommands:      # 不加前缀的命令白名单
-      - "扫码登陆"
 
 # ── 通知主人 ──
 disconnectToMaster: false   # 断开时通知主人
