@@ -14,6 +14,14 @@
 
 ## 安装
 
+```
+#github
+git clone https://github.com/wifeileina/gs-plugin.git ./plugins/gs-plugin/
+```
+```
+#gitee
+git clone https://gitee.com/Ileina/gs-plugin.git ./plugins/gs-plugin/
+```
 将 `gs-plugin` 文件夹放入 `TRSS-Yunzai/plugins/` 目录下：
 
 ```
