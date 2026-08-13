@@ -40,8 +40,13 @@ export function supportGuoba() {
     },
     // 配置项信息
     configInfo: {
-      // 配置项 schemas
+      // 配置项 schemas（使用 SOFT_GROUP_BEGIN 实现 Tab 分页）
       schemas: [
+        // ── Tab: 核心连接 ──
+        {
+          component: 'SOFT_GROUP_BEGIN',
+          label: '核心连接'
+        },
         {
           component: 'Divider',
           label: '插件开关'
@@ -165,6 +170,11 @@ export function supportGuoba() {
             ]
           }
         },
+        // ── Tab: 消息规则 ──
+        {
+          component: 'SOFT_GROUP_BEGIN',
+          label: '消息规则'
+        },
         {
           component: 'Divider',
           label: '群聊消息拦截'
@@ -277,6 +287,11 @@ export function supportGuoba() {
           bottomHelpMessage: '首次连接成功/失败时是否通知主人',
           component: 'Switch',
         },
+        // ── Tab: 前缀设置 ──
+        {
+          component: 'SOFT_GROUP_BEGIN',
+          label: '前缀设置'
+        },
         {
           component: 'Divider',
           label: 'GS前缀设置'
@@ -323,6 +338,49 @@ export function supportGuoba() {
               }
             ]
           }
+        },
+        // ── Tab: Legacy设置 ──
+        {
+          component: 'SOFT_GROUP_BEGIN',
+          label: 'Legacy设置'
+        },
+        {
+          component: 'Divider',
+          label: 'Legacy 模式'
+        },
+        {
+          field: 'gs.legacyReplyEnabled',
+          label: '启用 Legacy',
+          bottomHelpMessage: '回复时使用旧版消息发送方式（适用于部分适配器兼容性问题）',
+          component: 'Switch',
+        },
+        {
+          field: 'gs.legacyReplyGroups',
+          label: '生效群聊',
+          bottomHelpMessage: '留空=所有群聊生效；私聊不受此限制',
+          component: 'GSelectGroup',
+          componentProps: {
+            allowAdd: true,
+            allowDel: true,
+            mode: 'multiple',
+            options: groupList
+          }
+        },
+        {
+          field: 'gs.legacyReplyBots',
+          label: '生效机器人',
+          bottomHelpMessage: '留空=所有机器人生效',
+          component: 'Select',
+          componentProps: {
+            mode: 'multiple',
+            options: botList,
+            placeholder: '请选择生效的机器人'
+          }
+        },
+        // ── Tab: 高级设置 ──
+        {
+          component: 'SOFT_GROUP_BEGIN',
+          label: '高级设置'
         },
         {
           component: 'Divider',
@@ -385,6 +443,17 @@ export function supportGuoba() {
         })
         // 确保 pluginEnabled 有默认值
         if (gs.pluginEnabled === undefined) gs.pluginEnabled = false
+        // 展开 legacyReply 供 guoba 表单使用
+        const legacyRaw = gs.legacyReply
+        if (legacyRaw && typeof legacyRaw === 'object') {
+          gs.legacyReplyEnabled = legacyRaw.enabled === true
+          gs.legacyReplyGroups = Array.isArray(legacyRaw.groups) ? legacyRaw.groups : []
+          gs.legacyReplyBots = Array.isArray(legacyRaw.bots) ? legacyRaw.bots : []
+        } else {
+          gs.legacyReplyEnabled = legacyRaw === true
+          gs.legacyReplyGroups = []
+          gs.legacyReplyBots = []
+        }
         const fallbackEnabledBots = Array.isArray(gs.enabledBots) && gs.enabledBots.length > 0 ? gs.enabledBots : ['all']
         // 提取多连接设置
         gs.serversList = (Array.isArray(gs.servers) ? gs.servers : []).map(server => {
@@ -437,6 +506,23 @@ export function supportGuoba() {
         if ('gs.enabledBotsAll' in data || 'gs.enabledBots' in data) {
           delete data['gs.enabledBotsAll']
           delete data['gs.enabledBots']
+        }
+        // 收集 legacyReply 展开字段，合并为对象后写入
+        const legacyKeys = ['gs.legacyReplyEnabled', 'gs.legacyReplyGroups', 'gs.legacyReplyBots']
+        if (legacyKeys.some(k => k in data)) {
+          const current = config.legacyReply
+          const curObj = current && typeof current === 'object' ? current : { enabled: current === true, groups: [], bots: [] }
+          const newObj = {
+            enabled: 'gs.legacyReplyEnabled' in data ? data['gs.legacyReplyEnabled'] : curObj.enabled,
+            groups: 'gs.legacyReplyGroups' in data ? (Array.isArray(data['gs.legacyReplyGroups']) ? data['gs.legacyReplyGroups'] : []) : (curObj.groups || []),
+            bots: 'gs.legacyReplyBots' in data ? (Array.isArray(data['gs.legacyReplyBots']) ? data['gs.legacyReplyBots'] : []) : (curObj.bots || [])
+          }
+          if (!lodash.isEqual(current, newObj)) {
+            Config.modify('gs-config', 'legacyReply', newObj)
+          }
+          delete data['gs.legacyReplyEnabled']
+          delete data['gs.legacyReplyGroups']
+          delete data['gs.legacyReplyBots']
         }
         for (const key in data) {
           let split = key.split('.')

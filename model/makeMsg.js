@@ -152,6 +152,51 @@ async function makeGSUidReportMsg (e, botId = 'onebot') {
   return Buffer.from(JSON.stringify(MessageReceive))
 }
 
+const CODE_RE = /^兑换码[:：]\s*(.+?)\s*$/
+const REWARD_RE = /^奖励[:：]\s*(.+?)\s*$/
+const EXPIRY_RE = /^(有效期.*)$/
+
+function tryBuildGachacodeMarkdown (content) {
+  if (typeof content !== 'string' || !content.includes('兑换码')) return null
+
+  const lines = content.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+  const entries = []
+  let index = 0
+
+  while (index < lines.length) {
+    const codeMatch = lines[index].match(CODE_RE)
+    if (!codeMatch) {
+      index++
+      continue
+    }
+
+    const code = codeMatch[1].trim()
+    let reward = ''
+    let expiry = ''
+    let nextIndex = index + 1
+
+    while (nextIndex < lines.length && !CODE_RE.test(lines[nextIndex])) {
+      const rewardMatch = lines[nextIndex].match(REWARD_RE)
+      const expiryMatch = lines[nextIndex].match(EXPIRY_RE)
+      if (rewardMatch) reward = rewardMatch[1].trim()
+      else if (expiryMatch) expiry = expiryMatch[1].trim()
+      nextIndex++
+    }
+
+    entries.push({ code, reward, expiry })
+    index = nextIndex
+  }
+
+  if (!entries.length) return null
+
+  return entries.map(({ code, reward, expiry }) => {
+    // QQBot 的代码块需在标题、围栏和奖励行之间保留空行。
+    const formattedReward = reward.replaceAll('*', '×')
+    const fenceInfo = expiry || '长期'
+    return `##兑换码：\n\n>奖励: ${formattedReward}\n\n\`\`\`${fenceInfo}\n\n${code}\n\n\`\`\``
+  }).join('\n\n')
+}
+
 /**
  * 制作gsuid发送消息
  * @param {*} data
@@ -159,6 +204,21 @@ async function makeGSUidReportMsg (e, botId = 'onebot') {
 async function makeGSUidSendMsg (data) {
   let content = data.content; let quote = null; let bot = Bot[data.bot_self_id] || Bot
   const sendMsg = []
+  const adapter = bot?.adapter
+  const botSelfId = String(data.bot_self_id).split(':')[0]
+  const isQQBotAdapter = [data.bot_adapter, adapter?.id, adapter?.name, adapter?.platform, adapter]
+    .some(value => String(value || '').toLowerCase() === 'qqbot')
+  const isQQBotAccount = Object.hasOwn(Bot.QQBotConfig?.config?.markdown || {}, botSelfId)
+  // QQBot 群聊和私聊的目标 ID 是 32 位十六进制字符串；GSUID 回包缺 bot_self_id 时用作兑换码转换兜底。
+  const isQQBotTarget = /^(?:[0-9a-f]{32})$/i.test(String(data.target_id || '').split(':').pop())
+  const isQQBot = isQQBotAdapter || isQQBotAccount || isQQBotTarget
+  const gachaSegments = content.filter(msg => {
+    const value = typeof msg.data === 'string' ? msg.data : msg.data?.content || msg.data?.text
+    return typeof value === 'string' && value.includes('兑换码')
+  })
+  if (gachaSegments.length) {
+    logger.mark(`[gs-plugin] 兑换码响应入口: bot=${botSelfId}, qqbot=${isQQBot}, segments=${gachaSegments.map(msg => msg.type).join(',')}`)
+  }
   if (content[0].type.startsWith('log')) {
     logger.info(content[0].data)
   } else {
@@ -177,9 +237,19 @@ async function makeGSUidSendMsg (data) {
           }
           sendMsg.push(segment.image(msg.data))
           break
-        case 'text':
+        case 'text': {
+          const gachaMarkdown = isQQBot
+            ? tryBuildGachacodeMarkdown(String(msg.data))
+            : null
+
+          if (gachaMarkdown) {
+            logger.mark('[gs-plugin] QQBot 兑换码文本已转为原生 Markdown')
+            sendMsg.push(toMD(gachaMarkdown))
+            break
+          }
           sendMsg.push(msg.data)
           break
+        }
         case 'at':
           sendMsg.push(segment.at(Number(msg.data) || String(msg.data)))
           break
@@ -263,9 +333,22 @@ async function makeGSUidSendMsg (data) {
         case 'buttons':
           sendMsg.push(toGSButton(msg.data))
           break
-        case 'markdown':
+        case 'markdown': {
+          const markdownContent = typeof msg.data === 'string'
+            ? msg.data
+            : msg.data?.content
+          const markdown = isQQBot
+            ? tryBuildGachacodeMarkdown(markdownContent)
+            : null
+
+          if (markdown) {
+            logger.mark('[gs-plugin] QQBot 兑换码 markdown 段已转为原生 Markdown')
+            sendMsg.push(toMD(markdown))
+            break
+          }
           sendMsg.push(toMD(msg.data))
           break
+        }
         default:
           break
       }

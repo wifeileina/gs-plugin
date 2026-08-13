@@ -129,6 +129,10 @@ class Config {
     return this.getDefOrConfig('gs-config').tempMsgReport
   }
 
+  get legacyReply () {
+    return this.getDefOrConfig('gs-config').legacyReply
+  }
+
   get groupIntercept () {
     return this.getDefOrConfig('gs-config').groupIntercept || []
   }

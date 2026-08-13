@@ -58,13 +58,20 @@ howToMaster: 0
 # 禁用群聊列表
 noGroup:
   - 1102448154
-  - 277045897
 # 白名单群聊
 yesGroup: []
 # 禁言拦截
 muteStop: true
 # 临时会话是否上报
 tempMsgReport: false
+# 回复时是否使用 legacy 模式
+# true 时强制使用旧版消息发送方式（适用于部分适配器兼容性问题）
+legacyReply:
+  enabled: true
+  groups: []
+  bots:
+    - "4015042124"
+    - "4013998538"
 # 不转发消息前缀
 noMsgStart: []
 # 不包含消息内容
@@ -79,5 +86,12 @@ groupIntercept:
       - 711820611
     prefixes:
       - ww
+  - groupIds:
+      - 1041617233
+    prefixes:
+      - ww
+      - end
+      - yh
+      - net
 # 数据库同步锁
 taskQueue: 0

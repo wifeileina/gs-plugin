@@ -239,6 +239,15 @@ select { width: 140px; }
       <a class="nav-tab active" data-tab="tab-core" onclick="switchTab('tab-core')">
         <span class="ico">🔌</span>核心连接
       </a>
+      <a class="nav-tab" data-tab="tab-msg" onclick="switchTab('tab-msg')">
+        <span class="ico">📋</span>消息规则
+      </a>
+      <a class="nav-tab" data-tab="tab-prefix" onclick="switchTab('tab-prefix')">
+        <span class="ico">🏷️</span>前缀设置
+      </a>
+      <a class="nav-tab" data-tab="tab-legacy" onclick="switchTab('tab-legacy')">
+        <span class="ico">📱</span>Legacy设置
+      </a>
       <a class="nav-tab" data-tab="tab-ext" onclick="switchTab('tab-ext')">
         <span class="ico">⚙️</span>高级设置
       </a>
@@ -276,7 +285,7 @@ select { width: 140px; }
 
     </div>
 
-    <div class="tab-panel" id="tab-ext">
+    <div class="tab-panel" id="tab-msg">
       <div class="card">
         <div class="section-title">🚫 群聊消息拦截</div>
         <div id="interceptList"></div>
@@ -297,13 +306,42 @@ select { width: 140px; }
           <div class="form-row"><label>首次连接</label><div class="toggle-wrap"><div class="toggle" id="firstconnectToMaster" onclick="toggle(this)"></div></div></div>
         </div>
       </div>
+    </div>
 
+    <div class="tab-panel" id="tab-prefix">
       <div class="card">
         <div class="section-title">🏷️ GS前缀设置</div>
+        <p style="font-size:12px;color:#9ca3af;margin-bottom:10px;">按 BOT 账号在转发消息时自动添加命令前缀，使同一 GS 核心服务可区分不同 BOT 的指令。开启后自动移除消息中的 / 前缀。</p>
         <div id="prefixList"></div>
         <button class="btn" onclick="addPrefix()" style="margin-top:4px;">+ 添加</button>
       </div>
+    </div>
 
+    <div class="tab-panel" id="tab-legacy">
+      <div class="card">
+        <div class="section-title">📱 Legacy 模式</div>
+        <p style="font-size:12px;color:#9ca3af;margin-bottom:10px;">回复时使用旧版消息发送方式，适用于部分适配器兼容性问题。可按群聊和机器人设置生效范围。</p>
+        <div class="form-row">
+          <label>启用</label>
+          <div class="toggle-wrap">
+            <div class="toggle" id="legacyReplyEnabled" onclick="toggle(this)"></div>
+            <span class="hint">开启后对符合范围的回复使用 legacy 模式</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title">生效群聊</div>
+        <p style="font-size:12px;color:#9ca3af;margin-bottom:8px;">留空=所有群聊生效；私聊不受此限制</p>
+        <div class="group-select-wrap" id="legacyGroupSelectWrap"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">生效机器人</div>
+        <p style="font-size:12px;color:#9ca3af;margin-bottom:8px;">留空=所有机器人生效</p>
+        <div id="legacyBotList"></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-ext">
       <div class="card">
         <div class="section-title">⚙️ 其他设置</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;">
@@ -339,6 +377,11 @@ function buildConfigBody() {
     yesGroup: JSON.parse(JSON.stringify(configData.yesGroup || [])),
     muteStop: isOn('muteStop'), ignoreOnlyReplyAt: isOn('ignoreOnlyReplyAt'),
     tempMsgReport: isOn('tempMsgReport'),
+    legacyReply: {
+      enabled: isOn('legacyReplyEnabled'),
+      groups: JSON.parse(JSON.stringify(configData.legacyReply?.groups || [])),
+      bots: JSON.parse(JSON.stringify(configData.legacyReply?.bots || []))
+    },
     disconnectToMaster: isOn('disconnectToMaster'), reconnectToMaster: isOn('reconnectToMaster'),
     firstconnectToMaster: isOn('firstconnectToMaster'),
     msgStoreTime: Number(document.getElementById('msgStoreTime').value) || 300,
@@ -353,7 +396,7 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
   document.querySelector(`[data-tab="${tabId}"]`).classList.add('active')
   document.getElementById(tabId).classList.add('active')
-  const titles = { 'tab-core': '核心连接', 'tab-ext': '高级设置' }
+  const titles = { 'tab-core': '核心连接', 'tab-msg': '消息规则', 'tab-prefix': '前缀设置', 'tab-legacy': 'Legacy设置', 'tab-ext': '高级设置' }
   const titleEl = document.getElementById('pageTitle')
   if (titleEl && titles[tabId]) titleEl.textContent = titles[tabId]
 }
@@ -418,6 +461,9 @@ function renderAll() {
   setToggle('muteStop', d.muteStop)
   setToggle('ignoreOnlyReplyAt', d.ignoreOnlyReplyAt)
   setToggle('tempMsgReport', d.tempMsgReport)
+  setToggle('legacyReplyEnabled', d.legacyReply?.enabled)
+  renderLegacyGroups()
+  renderLegacyBots()
   document.getElementById('msgStoreTime').value = d.msgStoreTime ?? 300
   document.getElementById('taskQueue').value = d.taskQueue ?? 0
   document.getElementById('heartbeatInterval').value = d.heartbeatInterval ?? 5
@@ -764,6 +810,74 @@ function addPrefix() {
 }
 function removePrefix(selfId) { delete configData.gsuidBotPrefix[selfId]; renderPrefixes(); computeDirty() }
 function updatePrefix(selfId, key, val) { if (configData.gsuidBotPrefix[selfId]) { configData.gsuidBotPrefix[selfId][key] = val; computeDirty() } }
+
+// ── Legacy 群聊选择器 ──
+function renderLegacyGroups() {
+  const wrap = document.getElementById('legacyGroupSelectWrap')
+  if (!wrap) return
+  const selected = configData.legacyReply?.groups || []
+  const selectedLabels = selected.map(id => { const g = groupList.find(g => g.value === id); return g ? g.label : id })
+  const selectedAvatars = selected.map(id => { const g = groupList.find(g => g.value === id); return g ? g.avatar : '' })
+  wrap.innerHTML = `
+    <div class="group-select-trigger" onclick="toggleLegacyGroupDropdown()">
+      <span class="count">${selected.length > 0 ? '已选 ' + selected.length + ' 个群聊' : '选择群聊...'}</span>
+      <span class="arrow">▾</span>
+    </div>
+    ${selected.length > 0 ? `<div class="group-select-tags" id="legacyGroupTags">
+      ${selected.map((id, si) => `<span class="tag"><img class="tag-avatar" src="${escHtml(selectedAvatars[si])}" onerror="this.style.display='none'" loading="lazy"> ${escHtml(selectedLabels[si] || id)} <span class="rm" onclick="event.stopPropagation();removeLegacyGroup('${escHtml(id)}')">&times;</span></span>`).join('')}
+    </div>` : ''}
+    <div class="group-select-dropdown" id="legacyGroupDropdown">
+      ${groupList.length === 0 ? '<div class="no-groups">暂无可用群聊</div>' : groupList.map(g => {
+        const checked = selected.includes(g.value) ? 'checked' : ''
+        const cls = checked ? 'selected' : ''
+        return `<div class="group-select-option ${cls}" data-value="${escHtml(g.value)}" onclick="toggleLegacyGroupOption('${escHtml(g.value)}',this)">
+          <input type="checkbox" value="${escHtml(g.value)}" ${checked}>
+          <img class="opt-avatar" src="${escHtml(g.avatar)}" onerror="this.style.display='none'" loading="lazy">
+          <div class="opt-info"><div class="opt-name">${escHtml(g.group_name || g.label.split('-')[0])} <span class="opt-id">${escHtml(g.value)}</span></div></div>
+        </div>`
+      }).join('')}
+    </div>
+  `
+}
+function toggleLegacyGroupDropdown() {
+  const dd = document.getElementById('legacyGroupDropdown')
+  if (!dd) return
+  document.querySelectorAll('.group-select-dropdown').forEach(el => { if (el.id !== 'legacyGroupDropdown') el.style.display = 'none' })
+  dd.style.display = dd.style.display === 'none' || dd.style.display === '' ? 'block' : 'none'
+}
+function toggleLegacyGroupOption(value, el) {
+  const cb = el.querySelector('input[type="checkbox"]')
+  cb.checked = !cb.checked
+  if (cb.checked) el.classList.add('selected'); else el.classList.remove('selected')
+  if (!configData.legacyReply) configData.legacyReply = { enabled: false, groups: [], bots: [] }
+  if (!configData.legacyReply.groups) configData.legacyReply.groups = []
+  if (cb.checked) { if (!configData.legacyReply.groups.includes(value)) configData.legacyReply.groups.push(value) }
+  else { configData.legacyReply.groups = configData.legacyReply.groups.filter(id => id !== value) }
+  renderLegacyGroups(); computeDirty()
+}
+function removeLegacyGroup(value) {
+  if (!configData.legacyReply?.groups) return
+  configData.legacyReply.groups = configData.legacyReply.groups.filter(id => id !== value)
+  renderLegacyGroups(); computeDirty()
+}
+
+// ── Legacy 机器人选择器 ──
+function renderLegacyBots() {
+  const wrap = document.getElementById('legacyBotList')
+  if (!wrap) return
+  if (botList.length === 0) { wrap.innerHTML = '<span class="hint">暂无已连接BOT</span>'; return }
+  const selected = configData.legacyReply?.bots || []
+  wrap.innerHTML = botList.map(b => {
+    const c = selected.includes(String(b.value)) ? 'checked' : ''
+    return `<label style="margin-right:8px;font-size:12px;cursor:pointer;"><input type="checkbox" value="${escHtml(b.value)}" ${c} class="legacy-bot-check" onchange="toggleLegacyBot(this)"> ${escHtml(b.label)}</label>`
+  }).join('')
+}
+function toggleLegacyBot(checkbox) {
+  if (!configData.legacyReply) configData.legacyReply = { enabled: false, groups: [], bots: [] }
+  if (!configData.legacyReply.bots) configData.legacyReply.bots = []
+  configData.legacyReply.bots = [...document.querySelectorAll('.legacy-bot-check:checked')].map(cb => cb.value)
+  computeDirty()
+}
 
 async function saveConfig() {
   const body = buildConfigBody()

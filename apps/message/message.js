@@ -71,7 +71,15 @@ Bot.on('message', async e => {
   const message_id = Math.floor(Math.random() * Math.pow(2, 32)) | 0
   const self_id = await getUser_id({ user_id: e.self_id })
   const user_id = await getUser_id({ user_id: e.user_id })
-  const time = (new Date(e.time)).getTime() || Math.floor(Date.now() / 1000)
+  const now = Math.floor(Date.now() / 1000)
+  const rawEventTime = Number(e.time)
+  const parsedEventTime = Number.isFinite(rawEventTime)
+    ? rawEventTime
+    : Math.floor(new Date(e.time).getTime() / 1000)
+  // latestMsg 以秒为单位过期；避免秒级时间被 Date 误当作毫秒。
+  const time = parsedEventTime >= 1000000000 && parsedEventTime <= now + 300
+    ? Math.floor(parsedEventTime > 100000000000 ? parsedEventTime / 1000 : parsedEventTime)
+    : now
   let msg = {
     time: e.time,
     message_id: e.message_id,
@@ -101,9 +109,13 @@ Bot.on('message', async e => {
       }
     }
   }
-  if (e.guild_id || e.bot?.adapter?.id === 'QQBot' || e.bot?.adapter?.id === 'QQGuild' || e.adapter == 'QQBot' || e.adapter == 'QQGuild') {
-    setLatestMsg(e.group_id || e.user_id, { time, message_id: e.message_id, reply: e.reply })
+  const sessionId = String(e.group_id || e.user_id)
+  const latestMessage = { time, message_id: e.message_id, reply: e.reply, e }
+  // 回包不会稳定携带 bot_self_id，因此所有请求都缓存会话上下文；最终是否使用 QQBot Markdown 仍由回填的账号配置决定。
+  for (const cacheId of new Set([sessionId, sessionId.split(':').pop()])) {
+    setLatestMsg(cacheId, latestMessage)
   }
+  logger.debug(`[gs-plugin] 已缓存 GSUID 请求上下文: target_id=${sessionId}, bot=${e.self_id}`)
   let userInfo
   if (e.message_type == 'group') {
     msg.isGroup = true

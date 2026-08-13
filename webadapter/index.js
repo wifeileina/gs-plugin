@@ -43,6 +43,9 @@ export function init(ctx) {
           muteStop: cfg.muteStop !== false,
           ignoreOnlyReplyAt: cfg.ignoreOnlyReplyAt !== false,
           tempMsgReport: cfg.tempMsgReport === true,
+          legacyReply: cfg.legacyReply && typeof cfg.legacyReply === 'object'
+            ? cfg.legacyReply
+            : { enabled: cfg.legacyReply === true, groups: [], bots: [] },
           disconnectToMaster: cfg.disconnectToMaster === true,
           reconnectToMaster: cfg.reconnectToMaster === true,
           firstconnectToMaster: cfg.firstconnectToMaster === true,
@@ -65,7 +68,7 @@ export function init(ctx) {
       const allowedKeys = [
         'pluginEnabled', 'enabledBots', 'servers', 'groupIntercept',
         'noMsgStart', 'noMsgInclude', 'noGroup', 'yesGroup',
-        'muteStop', 'ignoreOnlyReplyAt', 'tempMsgReport',
+        'muteStop', 'ignoreOnlyReplyAt', 'tempMsgReport', 'legacyReply',
         'disconnectToMaster', 'reconnectToMaster', 'firstconnectToMaster',
         'msgStoreTime', 'taskQueue', 'heartbeatInterval', 'gsuidBotPrefix'
       ]

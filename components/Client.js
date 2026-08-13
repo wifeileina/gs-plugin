@@ -2,6 +2,20 @@ import WebSocket from 'ws'
 import { makeGSUidSendMsg, getLatestMsg, setMsg } from '../model/index.js'
 import { Version, Config } from './index.js'
 
+/** 判断是否应该对该消息启用 legacy 模式 */
+function shouldUseLegacy (legacyCfg, scopeGroupId, botSelfId) {
+  if (!legacyCfg) return false
+  // 兼容旧版布尔值配置
+  if (typeof legacyCfg === 'boolean') return legacyCfg
+  if (!legacyCfg.enabled) return false
+  const { groups = [], bots = [] } = legacyCfg
+  // groups 为空=所有群聊生效；私聊（scopeGroupId 为空）不受群聊过滤
+  const groupMatch = !scopeGroupId || !groups.length || groups.includes(String(scopeGroupId))
+  // bots 为空=所有机器人生效
+  const botMatch = !bots.length || bots.includes(String(botSelfId))
+  return groupMatch && botMatch
+}
+
 export default class Client {
   constructor ({ name, address, reconnectInterval, maxReconnectAttempts, accessToken, uin = Bot.uin, closed = false, ...other }) {
     this.name = name
@@ -59,6 +73,14 @@ export default class Client {
     this.ws.on('message', async event => {
       try {
         const data = JSON.parse(event.toString())
+        const latest = getLatestMsg(data.target_id)
+        // GSUID 回包不含 bot_self_id 时，使用发起该会话请求的最近事件身份。
+        if (!data.bot_self_id && latest?.e?.self_id) data.bot_self_id = String(latest.e.self_id)
+        if (!data.bot_adapter && latest?.e?.adapter_id) data.bot_adapter = latest.e.adapter_id
+        if (!data.bot_self_id && data.content?.some(msg => String(msg.data || '').includes('兑换码'))) {
+          logger.warn(`[gs-plugin] 兑换码回包未关联到请求上下文: target_id=${data.target_id}, target_type=${data.target_type}`)
+        }
+
         const { sendMsg } = await makeGSUidSendMsg(data)
         if (sendMsg.length > 0) {
           let sendRet, group_id, user_id
@@ -73,6 +95,7 @@ export default class Client {
             group_id = data.target_id
             const latest = getLatestMsg(group_id)
             if (latest && typeof latest.reply === 'function') {
+              if (latest.e) latest.e.legacy = shouldUseLegacy(Config.legacyReply, group_id, data.bot_self_id)
               await latest.reply(sendMsg)
               sendRet = { message_id: `passive_${Date.now()}` }
             } else {
@@ -82,6 +105,7 @@ export default class Client {
             user_id = data.target_id
             const latest = getLatestMsg(user_id)
             if (latest && typeof latest.reply === 'function') {
+              if (latest.e) latest.e.legacy = shouldUseLegacy(Config.legacyReply, null, data.bot_self_id)
               await latest.reply(sendMsg)
               sendRet = { message_id: `passive_${Date.now()}` }
             } else {

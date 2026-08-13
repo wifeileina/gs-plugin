@@ -63,6 +63,12 @@ yesGroup: []
 muteStop: false
 # 临时会话是否上报
 tempMsgReport: false
+# 回复时是否使用 legacy 模式
+# true 时强制使用旧版消息发送方式（适用于部分适配器兼容性问题）
+legacyReply:
+  enabled: false
+  groups: []
+  bots: []
 # 不转发消息前缀
 noMsgStart: []
 # 不包含消息内容
