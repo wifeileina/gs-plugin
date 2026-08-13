@@ -84,6 +84,7 @@ noMsgInclude: []
 groupIntercept:
   - groupIds:
       - 711820611
+      - "277045897"
     prefixes:
       - ww
   - groupIds:

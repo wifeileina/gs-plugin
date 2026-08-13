@@ -16,6 +16,27 @@ function shouldUseLegacy (legacyCfg, scopeGroupId, botSelfId) {
   return groupMatch && botMatch
 }
 
+/** 仅让 GSUID 主动消息使用 QQBot 的单次 legacy 发送模式 */
+async function sendLegacyQQBotMsg (bot, targetType, targetId, msg) {
+  const botSelfId = String(bot?.self_id || '')
+  const markdownConfig = Bot.QQBotConfig?.config?.markdown || {}
+  const qqBotAdapter = Bot.adapter?.find(adapter => String(adapter?.id).toLowerCase() === 'qqbot')
+
+  if (!Object.hasOwn(markdownConfig, botSelfId) || !qqBotAdapter) return null
+
+  if (targetType === 'group') {
+    const target = bot.pickGroup(targetId)
+    return qqBotAdapter.sendGroupMsg({ ...target, legacy: true }, msg)
+  }
+
+  if (targetType === 'direct') {
+    const target = bot.pickFriend(targetId)
+    return qqBotAdapter.sendFriendMsg({ ...target, legacy: true }, msg)
+  }
+
+  return null
+}
+
 export default class Client {
   constructor ({ name, address, reconnectInterval, maxReconnectAttempts, accessToken, uin = Bot.uin, closed = false, ...other }) {
     this.name = name
@@ -99,7 +120,12 @@ export default class Client {
               await latest.reply(sendMsg)
               sendRet = { message_id: `passive_${Date.now()}` }
             } else {
-              sendRet = await bot.pickGroup(group_id).sendMsg(sendMsg)
+              const useLegacy = data.target_type === 'group' &&
+                shouldUseLegacy(Config.legacyReply, group_id, data.bot_self_id)
+              sendRet = useLegacy
+                ? await sendLegacyQQBotMsg(bot, 'group', group_id, sendMsg)
+                : null
+              sendRet ||= await bot.pickGroup(group_id).sendMsg(sendMsg)
             }
           } else if (data.target_type === 'direct') {
             user_id = data.target_id
@@ -109,7 +135,11 @@ export default class Client {
               await latest.reply(sendMsg)
               sendRet = { message_id: `passive_${Date.now()}` }
             } else {
-              sendRet = await bot.pickFriend(user_id).sendMsg(sendMsg)
+              const useLegacy = shouldUseLegacy(Config.legacyReply, null, data.bot_self_id)
+              sendRet = useLegacy
+                ? await sendLegacyQQBotMsg(bot, 'direct', user_id, sendMsg)
+                : null
+              sendRet ||= await bot.pickFriend(user_id).sendMsg(sendMsg)
             }
           } else {
             logger.warn(`[gs-plugin] 未知 target_type: ${data.target_type}`)
