@@ -13,6 +13,7 @@
 - 支持 **锅巴面板** 可视化配置
 
 ###释
+
 - legacy会在QQBot-plugin设置为raw时，强制使gscore消息转为普通消息发送
   >不影响兑换码转Markdown
   
