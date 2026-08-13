@@ -13,7 +13,8 @@
 - 支持 **锅巴面板** 可视化配置
 
 ###释
-- legacy会强制使gscore消息转为普通消息发送 >不影响兑换码转Markdown
+- legacy会强制使gscore消息转为普通消息发送
+  >不影响兑换码转Markdown
 
 ## 安装
 
