@@ -19,25 +19,20 @@ class Config {
   }
 
   initCfg () {
-    let path = `${Plugin_Path}/config/config/`
-    if (!fs.existsSync(path)) fs.mkdirSync(path)
-    let pathDef = `${Plugin_Path}/config/default_config/`
+    const path = `${Plugin_Path}/config/config/`
+    const pathDef = `${Plugin_Path}/config/default_config/`
+    fs.mkdirSync(path, { recursive: true })
+
     const files = fs.readdirSync(pathDef).filter(file => file.endsWith('.yaml'))
-    for (let file of files) {
-      if (!fs.existsSync(`${path}${file}`)) {
-        fs.copyFileSync(`${pathDef}${file}`, `${path}${file}`)
-      } else {
-        const config = YAML.parse(fs.readFileSync(`${path}${file}`, 'utf8'))
-        const defConfig = YAML.parse(fs.readFileSync(`${pathDef}${file}`, 'utf8'))
-        const { differences, result } = this.mergeObjectsWithPriority(config, defConfig)
-        if (differences) {
-          fs.copyFileSync(`${pathDef}${file}`, `${path}${file}`)
-          for (const key in result) {
-            this.modify(file.replace('.yaml', ''), key, result[key])
-          }
-        }
+    for (const file of files) {
+      const configFile = `${path}${file}`
+      if (!fs.existsSync(configFile)) {
+        fs.copyFileSync(`${pathDef}${file}`, configFile)
       }
-      this.watch(`${path}${file}`, file.replace('.yaml', ''), 'config')
+
+      // 用户配置一旦创建便只由用户或配置入口修改，更新模板不能覆盖它。
+      // 新增字段由 getDefOrConfig() 在运行时从默认配置提供回退值。
+      this.watch(configFile, file.replace('.yaml', ''), 'config')
     }
   }
 

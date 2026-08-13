@@ -1,0 +1,99 @@
+# 插件总开关
+# false 时关闭所有连接，不进行任何消息转发
+pluginEnabled: true
+# 启用的BOT列表
+# ['all'] 转发所有BOT，也可指定具体BOT的self_id列表
+# 例如: ['2854xxxxxx', '3889xxxxxx']
+enabledBots:
+  - all
+# 心跳频率, 单位秒
+# 0 为关闭心跳
+heartbeatInterval: 5
+# 是否忽略云崽配置文件的仅艾特
+ignoreOnlyReplyAt: false
+# gsuid_core上报前缀（按bot账号单独配置）
+# 键为bot账号(self_id)，值为要拼接在消息最前面的前缀
+#   - prefix: 前缀内容
+#   - skipIfHasPrefix: 有前缀不插入（默认 true）
+#     当命令去掉开头空白和/后，首字符是大小写字母或数字时，视为"已有前缀"
+#   - noPrefixCommands: 不加前缀命令
+#     判断方式：去掉开头空白和/后，命令以配置项任一内容开头即命中
+gsuidBotPrefix: {}
+# 是否单独添加仅艾特或前缀
+# 可以为每个连接单独添加
+onlyReplyAt:
+  enable: false
+  prefix:
+    - 示例前缀1
+# 连接服务列表
+# name: 连接名字  请保证每个名字都不相同,否则会出问题
+# address: 连接地址，格式: ws或wss://IP:端口/路径 (如 ws://127.0.0.1:8765/ws/yunzai)
+# enabled: 连接开关，false 时断开此连接
+# enabledBots: 此连接生效的BOT列表，['all'] 转发所有BOT，也可指定self_id列表
+# reconnectInterval: 重连间隔 单位:秒
+# maxReconnectAttempts: 最大连接次数 0 为无限制
+# accessToken: 鉴权token
+servers:
+  - name: gs_name
+    address: ws://127.0.0.1:8765/ws/yunzai
+    enabled: true
+    enabledBots:
+      - all
+    reconnectInterval: 5
+    maxReconnectAttempts: 0
+    accessToken: ""
+# 消息存储时间 (秒)
+# 0 为不存储
+msgStoreTime: 300
+# 掉线时否通知主人
+disconnectToMaster: false
+# 重连成功时是否通知主人
+reconnectToMaster: false
+# 首次连接成功时是否通知主人
+firstconnectToMaster: false
+# 通知主人方式
+# 0: 通知所有主人
+# 大于0: 通知指定顺序的主人
+howToMaster: 0
+# 禁用群聊列表
+noGroup: []
+# 白名单群聊
+yesGroup: []
+# 禁言拦截
+muteStop: false
+# 临时会话是否上报
+tempMsgReport: false
+# 回复时是否使用 legacy 模式
+# true 时强制使用旧版消息发送方式（适用于部分适配器兼容性问题）
+legacyReply:
+  enabled: true
+  groups: []
+  bots:
+    - "4015042124"
+    - "4013998538"
+# 不转发消息前缀
+noMsgStart: []
+# 不包含消息内容
+noMsgInclude: []
+# 群聊消息拦截配置
+# 按组配置，每组可指定多个群聊ID、多个前缀、可选的bot账号
+# botId: bot账号(self_id)，可选，不填则对所有bot生效
+# groupIds: 要拦截的群聊ID列表
+# prefixes: 要拦截的消息前缀列表（会自动忽略前面的@提及）
+groupIntercept:
+  - botId: ""
+    groupIds:
+      - "277045897"
+      - "711820611"
+    prefixes:
+      - ww
+  - botId: ""
+    groupIds:
+      - "1041617233"
+    prefixes:
+      - ww
+      - end
+      - yh
+      - nte
+# 数据库同步锁
+taskQueue: 0
