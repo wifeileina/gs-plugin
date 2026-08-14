@@ -5,6 +5,7 @@ import YamlReader from './YamlReader.js'
 import cfg from '../../../lib/config/config.js'
 import _ from 'lodash'
 import { modifyWebSocket, initWebSocket, clearWebSocket } from './WebSocket.js'
+import { normalizeMessageBuild } from './MessageBuild.js'
 
 const Path = process.cwd()
 const Plugin_Name = 'gs-plugin'
@@ -72,6 +73,11 @@ class Config {
     return this.getDefOrConfig('gs-config').gsuidBotPrefix || {}
   }
 
+  get gsuidPrefixIgnore () {
+    const list = this.getDefOrConfig('gs-config').gsuidPrefixIgnore
+    return Array.isArray(list) ? list : []
+  }
+
   get servers () {
     return this.getDefOrConfig('gs-config').servers
   }
@@ -125,7 +131,21 @@ class Config {
   }
 
   get legacyReply () {
-    return this.getDefOrConfig('gs-config').legacyReply
+    return this.messageBuild.legacyReply
+  }
+
+  get messageBuild () {
+    const defaults = this.getdefSet('gs-config')
+    const userConfig = this.getConfig('gs-config')
+    const messageBuild = _.merge({}, defaults.messageBuild || {}, userConfig.messageBuild || {})
+    const usesNewLegacy = Object.hasOwn(userConfig.messageBuild || {}, 'legacyReply')
+
+    // 旧版顶层配置只在用户尚未显式设置新版 Legacy 时作为迁移来源。
+    if (!usesNewLegacy && userConfig.legacyReply !== undefined) {
+      messageBuild.legacyReply = userConfig.legacyReply
+    }
+
+    return normalizeMessageBuild(messageBuild, defaults.legacyReply)
   }
 
   get groupIntercept () {
@@ -292,12 +312,11 @@ class Config {
         }
       } else if (!_.isEqual(objValue, srcValue)) {
         differences = true
-        return objValue !== undefined ? objValue : srcValue
+        return objValue
       }
-      return objValue !== undefined ? objValue : srcValue
     }
-    let result = _.mergeWith(_.cloneDeep(objA), objB, customizer)
-    return { differences, result }
+    const merged = _.mergeWith(_.cloneDeep(objA), objB, customizer)
+    return { merged, differences }
   }
 }
 

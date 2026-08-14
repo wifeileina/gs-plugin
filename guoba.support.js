@@ -339,23 +339,34 @@ export function supportGuoba() {
             ]
           }
         },
-        // ── Tab: Legacy设置 ──
+        {
+          field: 'gs.gsuidPrefixIgnore',
+          label: '前缀忽略',
+          bottomHelpMessage: '上报GS前，忽略/剥离消息开头的这些前缀。例如配置 "/" 后，收到 "/ww帮助" 会上报为 "ww帮助"。',
+          component: 'Select',
+          componentProps: {
+            allowClear: true,
+            mode: 'tags',
+            options: []
+          }
+        },
+        // ── Tab: 消息构造 ──
         {
           component: 'SOFT_GROUP_BEGIN',
-          label: 'Legacy设置'
+          label: '消息构造'
         },
         {
           component: 'Divider',
           label: 'Legacy 模式'
         },
         {
-          field: 'gs.legacyReplyEnabled',
+          field: 'gs.messageBuildLegacyReplyEnabled',
           label: '启用 Legacy',
-          bottomHelpMessage: '回复时使用旧版消息发送方式（适用于部分适配器兼容性问题）',
+          bottomHelpMessage: '仅对 GSUID 回包使用旧版发送方式，不改变 QQBot 的全局 raw 配置',
           component: 'Switch',
         },
         {
-          field: 'gs.legacyReplyGroups',
+          field: 'gs.messageBuildLegacyReplyGroups',
           label: '生效群聊',
           bottomHelpMessage: '留空=所有群聊生效；私聊不受此限制',
           component: 'GSelectGroup',
@@ -367,7 +378,7 @@ export function supportGuoba() {
           }
         },
         {
-          field: 'gs.legacyReplyBots',
+          field: 'gs.messageBuildLegacyReplyBots',
           label: '生效机器人',
           bottomHelpMessage: '留空=所有机器人生效',
           component: 'Select',
@@ -376,6 +387,22 @@ export function supportGuoba() {
             options: botList,
             placeholder: '请选择生效的机器人'
           }
+        },
+        {
+          component: 'Divider',
+          label: '强制主动消息'
+        },
+        {
+          field: 'gs.messageBuildForceActiveEnabled',
+          label: '启用强制主动消息',
+          bottomHelpMessage: '启用后，不做权限探测，对所有 QQBot 群聊生效。',
+          component: 'Switch'
+        },
+        {
+          field: 'gs.messageBuildForceActiveMatchingMode',
+          label: '匹配模式',
+          bottomHelpMessage: '关闭时所有回包主动发送；开启时，仅在收到末尾为“攻略”的指令后，当前会话 60 秒内主动发送。',
+          component: 'Switch'
         },
         // ── Tab: 高级设置 ──
         {
@@ -441,19 +468,15 @@ export function supportGuoba() {
             noPrefixCommands: Array.isArray(item?.noPrefixCommands) ? item.noPrefixCommands : []
           }
         })
+        gs.gsuidPrefixIgnore = Array.isArray(gs.gsuidPrefixIgnore) ? gs.gsuidPrefixIgnore : []
         // 确保 pluginEnabled 有默认值
         if (gs.pluginEnabled === undefined) gs.pluginEnabled = false
-        // 展开 legacyReply 供 guoba 表单使用
-        const legacyRaw = gs.legacyReply
-        if (legacyRaw && typeof legacyRaw === 'object') {
-          gs.legacyReplyEnabled = legacyRaw.enabled === true
-          gs.legacyReplyGroups = Array.isArray(legacyRaw.groups) ? legacyRaw.groups : []
-          gs.legacyReplyBots = Array.isArray(legacyRaw.bots) ? legacyRaw.bots : []
-        } else {
-          gs.legacyReplyEnabled = legacyRaw === true
-          gs.legacyReplyGroups = []
-          gs.legacyReplyBots = []
-        }
+        const messageBuild = Config.messageBuild
+        gs.messageBuildLegacyReplyEnabled = messageBuild.legacyReply.enabled
+        gs.messageBuildLegacyReplyGroups = messageBuild.legacyReply.groups
+        gs.messageBuildLegacyReplyBots = messageBuild.legacyReply.bots
+        gs.messageBuildForceActiveEnabled = messageBuild.forceActiveMessage.enabled
+        gs.messageBuildForceActiveMatchingMode = messageBuild.forceActiveMessage.matchingMode === true
         const fallbackEnabledBots = Array.isArray(gs.enabledBots) && gs.enabledBots.length > 0 ? gs.enabledBots : ['all']
         // 提取多连接设置
         gs.serversList = (Array.isArray(gs.servers) ? gs.servers : []).map(server => {
@@ -507,22 +530,41 @@ export function supportGuoba() {
           delete data['gs.enabledBotsAll']
           delete data['gs.enabledBots']
         }
-        // 收集 legacyReply 展开字段，合并为对象后写入
-        const legacyKeys = ['gs.legacyReplyEnabled', 'gs.legacyReplyGroups', 'gs.legacyReplyBots']
-        if (legacyKeys.some(k => k in data)) {
-          const current = config.legacyReply
-          const curObj = current && typeof current === 'object' ? current : { enabled: current === true, groups: [], bots: [] }
-          const newObj = {
-            enabled: 'gs.legacyReplyEnabled' in data ? data['gs.legacyReplyEnabled'] : curObj.enabled,
-            groups: 'gs.legacyReplyGroups' in data ? (Array.isArray(data['gs.legacyReplyGroups']) ? data['gs.legacyReplyGroups'] : []) : (curObj.groups || []),
-            bots: 'gs.legacyReplyBots' in data ? (Array.isArray(data['gs.legacyReplyBots']) ? data['gs.legacyReplyBots'] : []) : (curObj.bots || [])
+        // 收集消息构造表单字段，合并为 messageBuild 对象后写入
+        const messageBuildKeys = [
+          'gs.messageBuildLegacyReplyEnabled',
+          'gs.messageBuildLegacyReplyGroups',
+          'gs.messageBuildLegacyReplyBots',
+          'gs.messageBuildForceActiveEnabled',
+          'gs.messageBuildForceActiveMatchingMode'
+        ]
+        if (messageBuildKeys.some(key => key in data)) {
+          const current = Config.messageBuild
+          const next = {
+            legacyReply: {
+              enabled: 'gs.messageBuildLegacyReplyEnabled' in data
+                ? data['gs.messageBuildLegacyReplyEnabled'] === true
+                : current.legacyReply.enabled,
+              groups: 'gs.messageBuildLegacyReplyGroups' in data
+                ? (Array.isArray(data['gs.messageBuildLegacyReplyGroups']) ? data['gs.messageBuildLegacyReplyGroups'].map(String) : [])
+                : current.legacyReply.groups,
+              bots: 'gs.messageBuildLegacyReplyBots' in data
+                ? (Array.isArray(data['gs.messageBuildLegacyReplyBots']) ? data['gs.messageBuildLegacyReplyBots'].map(String) : [])
+                : current.legacyReply.bots
+            },
+            forceActiveMessage: {
+              enabled: 'gs.messageBuildForceActiveEnabled' in data
+                ? data['gs.messageBuildForceActiveEnabled'] === true
+                : current.forceActiveMessage.enabled,
+              matchingMode: 'gs.messageBuildForceActiveMatchingMode' in data
+                ? data['gs.messageBuildForceActiveMatchingMode'] === true
+                : current.forceActiveMessage.matchingMode === true
+            }
           }
-          if (!lodash.isEqual(current, newObj)) {
-            Config.modify('gs-config', 'legacyReply', newObj)
+          if (!lodash.isEqual(config.messageBuild, next)) {
+            Config.modify('gs-config', 'messageBuild', next)
           }
-          delete data['gs.legacyReplyEnabled']
-          delete data['gs.legacyReplyGroups']
-          delete data['gs.legacyReplyBots']
+          for (const key of messageBuildKeys) delete data[key]
         }
         for (const key in data) {
           let split = key.split('.')

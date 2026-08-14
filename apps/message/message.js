@@ -1,4 +1,5 @@
 import { sendSocketList, Config, Version } from '../../components/index.js'
+import { isQQBotMessage, markGuideActiveWindow } from '../../components/MessageBuild.js'
 import { makeGSUidReportMsg, setLatestMsg, setMsg, getGroup_id, getUser_id } from '../../model/index.js'
 import _ from 'lodash'
 import cfg from '../../../../lib/config/config.js'
@@ -269,13 +270,66 @@ Bot.on('message', async e => {
         }
       }
 
+      applyPrefixIgnore(tmpMsg)
       addGSUidBotPrefix(tmpMsg, e)
       reportMsg = await makeGSUidReportMsg(tmpMsg, botid)
 
-      if (reportMsg) i.ws.send(reportMsg)
+      if (reportMsg) {
+        markGuideCommandWindow(e)
+        i.ws.send(reportMsg)
+      }
     }
   }
 })
+
+function markGuideCommandWindow (e) {
+  if (!e.group_id || e.message_type !== 'group') return
+  if (!isQQBotMessage({ target_id: e.group_id, bot_adapter: e.bot?.adapter?.id }, e.bot)) return
+
+  const segments = Array.isArray(e.message) ? e.message : [{ type: 'text', text: e.message }]
+  const text = segments
+    .filter(segment => segment?.type === 'text')
+    .map(segment => String(segment.text || segment.data?.text || segment.data || ''))
+    .join('')
+    .replace(/^(?:\[CQ:at,[^\]]*\]\s*|@\S+\s*)+/, '')
+    .trim()
+
+  if (text.endsWith('攻略')) {
+    markGuideActiveWindow(e.self_id, e.group_id)
+    logger.debug(`[gs-plugin] 已开启攻略主动发送窗口: target_id=${e.group_id}, bot=${e.self_id}`)
+  }
+}
+
+function applyPrefixIgnore (e) {
+  const ignoreList = Config.gsuidPrefixIgnore
+  if (!Array.isArray(ignoreList) || ignoreList.length === 0) return
+  if (!Array.isArray(e.message)) return
+
+  const textIndex = e.message.findIndex(item => item?.type === 'text')
+  if (textIndex < 0) return
+
+  let rest = String(e.message[textIndex].text || '').replace(/^\s+/, '')
+  let changed = false
+  for (;;) {
+    let matched = false
+    for (const p of ignoreList) {
+      const prefix = String(p || '').trim()
+      if (!prefix) continue
+      if (rest.startsWith(prefix)) {
+        rest = rest.slice(prefix.length)
+        matched = true
+        break
+      }
+    }
+    if (!matched) break
+    changed = true
+  }
+
+  if (changed) {
+    e.message[textIndex].text = rest
+    logger.debug(`[gs-plugin] 前缀忽略后上报: ${rest}`)
+  }
+}
 
 function addGSUidBotPrefix (e, rawEvent) {
   const prefixCfg = Config.gsuidBotPrefix

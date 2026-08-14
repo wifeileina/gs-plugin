@@ -3,9 +3,10 @@
  * 由 QQBot-Web-Adapter 自动扫描并调用 init(ctx)
  */
 import { Config, getBotList } from '../components/index.js'
+import { normalizeMessageBuild } from '../components/MessageBuild.js'
 
 export function init(ctx) {
-  const { pluginName, registerPage, registerApi } = ctx
+  const { registerPage, registerApi } = ctx
 
   // 注册管理页面
   registerPage({
@@ -43,9 +44,9 @@ export function init(ctx) {
           muteStop: cfg.muteStop !== false,
           ignoreOnlyReplyAt: cfg.ignoreOnlyReplyAt !== false,
           tempMsgReport: cfg.tempMsgReport === true,
-          legacyReply: cfg.legacyReply && typeof cfg.legacyReply === 'object'
-            ? cfg.legacyReply
-            : { enabled: cfg.legacyReply === true, groups: [], bots: [] },
+          // 保留 legacyReply 字段供旧 Web 前端读取；新前端统一使用 messageBuild。
+          legacyReply: Config.messageBuild.legacyReply,
+          messageBuild: Config.messageBuild,
           disconnectToMaster: cfg.disconnectToMaster === true,
           reconnectToMaster: cfg.reconnectToMaster === true,
           firstconnectToMaster: cfg.firstconnectToMaster === true,
@@ -53,7 +54,7 @@ export function init(ctx) {
           taskQueue: cfg.taskQueue ?? 0,
           heartbeatInterval: cfg.heartbeatInterval ?? 5,
           gsuidBotPrefix: cfg.gsuidBotPrefix || {},
-          botList: bots,
+          gsuidPrefixIgnore: Array.isArray(cfg.gsuidPrefixIgnore) ? cfg.gsuidPrefixIgnore : []
         }
       })
     } catch (e) {
@@ -68,12 +69,16 @@ export function init(ctx) {
       const allowedKeys = [
         'pluginEnabled', 'enabledBots', 'servers', 'groupIntercept',
         'noMsgStart', 'noMsgInclude', 'noGroup', 'yesGroup',
-        'muteStop', 'ignoreOnlyReplyAt', 'tempMsgReport', 'legacyReply',
+        'muteStop', 'ignoreOnlyReplyAt', 'tempMsgReport', 'legacyReply', 'messageBuild',
         'disconnectToMaster', 'reconnectToMaster', 'firstconnectToMaster',
-        'msgStoreTime', 'taskQueue', 'heartbeatInterval', 'gsuidBotPrefix'
+        'msgStoreTime', 'taskQueue', 'heartbeatInterval', 'gsuidBotPrefix', 'gsuidPrefixIgnore'
       ]
       for (const key of Object.keys(body)) {
         if (!allowedKeys.includes(key)) continue
+        if (key === 'messageBuild') {
+          Config.modify('gs-config', key, normalizeMessageBuild(body[key]))
+          continue
+        }
         Config.modify('gs-config', key, body[key])
       }
       res.json({ ok: true })

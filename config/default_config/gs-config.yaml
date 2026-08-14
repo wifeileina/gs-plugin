@@ -19,6 +19,9 @@ ignoreOnlyReplyAt: false
 #   - noPrefixCommands: 不加前缀命令
 #     判断方式：去掉开头空白和/后，命令以配置项任一内容开头即命中
 gsuidBotPrefix: {}
+# 前缀忽略：上报GS前，忽略/剥离消息开头的这些前缀
+# 例如配置 - "/" 后，收到 "/ww帮助" 会上报为 "ww帮助"
+gsuidPrefixIgnore: []
 # 是否单独添加仅艾特或前缀
 # 可以为每个连接单独添加
 onlyReplyAt:
@@ -63,12 +66,18 @@ yesGroup: []
 muteStop: false
 # 临时会话是否上报
 tempMsgReport: false
-# 回复时是否使用 legacy 模式
-# true 时强制使用旧版消息发送方式（适用于部分适配器兼容性问题）
-legacyReply:
-  enabled: false
-  groups: []
-  bots: []
+# 消息构造：QQBot 回包的 Legacy 与主动消息
+messageBuild:
+  # 单次回包使用 Legacy，避免改变 QQBot 全局 raw 配置
+  legacyReply:
+    enabled: false
+    groups: []
+    bots: []
+  # 启用后不做权限探测，对所有 QQBot 群聊生效
+  forceActiveMessage:
+    enabled: false
+    # 关闭=所有回包主动发送；开启=仅在收到末尾为“攻略”的指令后，当前会话 60 秒内主动发送
+    matchingMode: false
 # 不转发消息前缀
 noMsgStart: []
 # 不包含消息内容
