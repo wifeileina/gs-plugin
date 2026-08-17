@@ -5,6 +5,8 @@
 
 ## 功能
 
+   >为了维持稳定运行，不建议保持更新<del>史山说是</del>
+
 - 将 Bot 收到的消息（文字、图片、文件、引用、at 等）上报给 GS 核心
 - 接收 GS 核心下发的回复消息，并通过 Bot 发送回对应平台
 - 支持多协议适配：OneBot、QQBot、QQGuild、<del>KOOK、Telegram、Discord 等</del>（可能吧，其实只支持yunzai和qqbot）
