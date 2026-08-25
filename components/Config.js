@@ -5,6 +5,7 @@ import YamlReader from './YamlReader.js'
 import cfg from '../../../lib/config/config.js'
 import _ from 'lodash'
 import { modifyWebSocket, initWebSocket, clearWebSocket } from './WebSocket.js'
+import { normalizeMessageBuild } from './MessageBuild.js'
 
 const Path = process.cwd()
 const Plugin_Name = 'gs-plugin'
@@ -19,25 +20,20 @@ class Config {
   }
 
   initCfg () {
-    let path = `${Plugin_Path}/config/config/`
-    if (!fs.existsSync(path)) fs.mkdirSync(path)
-    let pathDef = `${Plugin_Path}/config/default_config/`
+    const path = `${Plugin_Path}/config/config/`
+    const pathDef = `${Plugin_Path}/config/default_config/`
+    fs.mkdirSync(path, { recursive: true })
+
     const files = fs.readdirSync(pathDef).filter(file => file.endsWith('.yaml'))
-    for (let file of files) {
-      if (!fs.existsSync(`${path}${file}`)) {
-        fs.copyFileSync(`${pathDef}${file}`, `${path}${file}`)
-      } else {
-        const config = YAML.parse(fs.readFileSync(`${path}${file}`, 'utf8'))
-        const defConfig = YAML.parse(fs.readFileSync(`${pathDef}${file}`, 'utf8'))
-        const { differences, result } = this.mergeObjectsWithPriority(config, defConfig)
-        if (differences) {
-          fs.copyFileSync(`${pathDef}${file}`, `${path}${file}`)
-          for (const key in result) {
-            this.modify(file.replace('.yaml', ''), key, result[key])
-          }
-        }
+    for (const file of files) {
+      const configFile = `${path}${file}`
+      if (!fs.existsSync(configFile)) {
+        fs.copyFileSync(`${pathDef}${file}`, configFile)
       }
-      this.watch(`${path}${file}`, file.replace('.yaml', ''), 'config')
+
+      // 用户配置一旦创建便只由用户或配置入口修改，更新模板不能覆盖它。
+      // 新增字段由 getDefOrConfig() 在运行时从默认配置提供回退值。
+      this.watch(configFile, file.replace('.yaml', ''), 'config')
     }
   }
 
@@ -75,6 +71,11 @@ class Config {
 
   get gsuidBotPrefix () {
     return this.getDefOrConfig('gs-config').gsuidBotPrefix || {}
+  }
+
+  get gsuidPrefixIgnore () {
+    const list = this.getDefOrConfig('gs-config').gsuidPrefixIgnore
+    return Array.isArray(list) ? list : []
   }
 
   get servers () {
@@ -121,6 +122,10 @@ class Config {
     return this.getDefOrConfig('gs-config').muteStop
   }
 
+  get shutdownStop () {
+    return this.getDefOrConfig('gs-config').shutdownStop !== false
+  }
+
   get ignoreOnlyReplyAt () {
     return this.getDefOrConfig('gs-config').ignoreOnlyReplyAt
   }
@@ -130,7 +135,21 @@ class Config {
   }
 
   get legacyReply () {
-    return this.getDefOrConfig('gs-config').legacyReply
+    return this.messageBuild.legacyReply
+  }
+
+  get messageBuild () {
+    const defaults = this.getdefSet('gs-config')
+    const userConfig = this.getConfig('gs-config')
+    const messageBuild = _.merge({}, defaults.messageBuild || {}, userConfig.messageBuild || {})
+    const usesNewLegacy = Object.hasOwn(userConfig.messageBuild || {}, 'legacyReply')
+
+    // 旧版顶层配置只在用户尚未显式设置新版 Legacy 时作为迁移来源。
+    if (!usesNewLegacy && userConfig.legacyReply !== undefined) {
+      messageBuild.legacyReply = userConfig.legacyReply
+    }
+
+    return normalizeMessageBuild(messageBuild, defaults.legacyReply)
   }
 
   get groupIntercept () {
@@ -237,33 +256,6 @@ class Config {
     delete this.config[configKey]
   }
 
-  modifyarr (name, key, value, category = 'add', type = 'config') {
-    let path = `${Plugin_Path}/config/${type}/${name}.yaml`
-    let yaml = new YamlReader(path)
-    if (category == 'add') {
-      yaml.addIn(key, value)
-    } else {
-      let index = yaml.jsonData[key].indexOf(value)
-      yaml.delete(`${key}.${index}`)
-    }
-  }
-
-  setArr (name, key, item, value, type = 'config') {
-    let path = `${Plugin_Path}/config/${type}/${name}.yaml`
-    let yaml = new YamlReader(path)
-    let arr = yaml.get(key).slice()
-    arr[item] = value
-    yaml.set(key, arr)
-  }
-
-  delServersArr (value, name = 'gs-config', type = 'config') {
-    let path = `${Plugin_Path}/config/${type}/${name}.yaml`
-    let yaml = new YamlReader(path)
-    let key = 'servers'
-    let index = yaml.jsonData[key].findIndex(item => item.name === value)
-    yaml.delete(`${key}.${index}`)
-  }
-
   findDifference (obj1, obj2, parentKey = '') {
     const result = {}
     for (const key in obj1) {
@@ -284,25 +276,6 @@ class Config {
       }
     }
     return result
-  }
-
-  mergeObjectsWithPriority (objA, objB) {
-    let differences = false
-    function customizer (objValue, srcValue, key, object, source, stack) {
-      if (_.isArray(objValue) && _.isArray(srcValue)) {
-        return objValue
-      } else if (_.isPlainObject(objValue) && _.isPlainObject(srcValue)) {
-        if (!_.isEqual(objValue, srcValue)) {
-          return _.mergeWith(_.cloneDeep(objValue), srcValue, customizer)
-        }
-      } else if (!_.isEqual(objValue, srcValue)) {
-        differences = true
-        return objValue !== undefined ? objValue : srcValue
-      }
-      return objValue !== undefined ? objValue : srcValue
-    }
-    let result = _.mergeWith(_.cloneDeep(objA), objB, customizer)
-    return { differences, result }
   }
 }
 

@@ -1,16 +1,22 @@
 import { sendSocketList, Config, Version } from '../../components/index.js'
+import { isQQBotMessage, markGuideActiveWindow } from '../../components/MessageBuild.js'
 import { makeGSUidReportMsg, setLatestMsg, setMsg, getGroup_id, getUser_id } from '../../model/index.js'
 import _ from 'lodash'
 import cfg from '../../../../lib/config/config.js'
+import PluginsLoader from '../../../../lib/plugins/loader.js'
 
 Bot.on('message', async e => {
   if (!e.user_id) return false
+  // 联动 yunzai 关机状态：关机时不上报消息（"关机状态联动"关闭时不生效）
+  if (Config.shutdownStop && isYunzaiPoweredOff()) return false
   // 被禁言或者全体禁言
   if (Config.muteStop && (e.group?.mute_left > 0 || e.group?.all_muted)) return false
   // 临时会话
   if (Config.tempMsgReport && e.post_type === 'post_type' && e.message_type === 'private' && e.sub_type === 'group') return false
   // 如果没有已连接的Websocket
   if (sendSocketList.length == 0) return false
+  // 联动 yunzai 的仅@设置：yunzai 判定为非主动提及的消息不上报（"忽略仅@"开启时不生效）
+  if (!Config.ignoreOnlyReplyAt && isYunzaiOnlyReplyAtBlocked(e)) return false
   if (e.group_id) {
     // 判断云崽白名单群
     const whiteGroup = Config.whiteGroup
@@ -269,13 +275,117 @@ Bot.on('message', async e => {
         }
       }
 
+      applyPrefixIgnore(tmpMsg)
       addGSUidBotPrefix(tmpMsg, e)
       reportMsg = await makeGSUidReportMsg(tmpMsg, botid)
 
-      if (reportMsg) i.ws.send(reportMsg)
+      if (reportMsg) {
+        markGuideCommandWindow(e)
+        i.ws.send(reportMsg)
+      }
     }
   }
 })
+
+function isYunzaiPoweredOff () {
+  try {
+    const priority = PluginsLoader.priority
+    return Array.isArray(priority) && priority.length === 1 && priority[0]?.plugin?.name === '开机'
+  } catch (_) {
+    return false
+  }
+}
+
+// 复刻 yunzai lib/plugins/loader.js 的 onlyReplyAt() 判定。
+// 插件 handler 先于 deal() 执行，e.only_reply_at 尚未设置，需自行按原始消息计算。
+// 返回 true 表示 yunzai 判定该消息非主动提及，应不上报。
+function isYunzaiOnlyReplyAtBlocked (e) {
+  if (!e.message || e.message_type === 'private') return false
+  const message = Array.isArray(e.message) ? e.message : [{ type: 'text', text: String(e.message) }]
+  const groupCfg = cfg.getGroup(e.self_id, e.group_id)
+  // 模式0未开启，或未配置前缀：不受限制
+  if (groupCfg.onlyReplyAt === 0 || !groupCfg.botAlias) return false
+  // 模式2：主人不受限
+  if (groupCfg.onlyReplyAt === 2 && isYunzaiMaster(e)) return false
+  // 被@机器人
+  if (message.some(m => m.type === 'at' && String(m.qq) === String(e.self_id))) return false
+  // 消息带前缀
+  const msg = yunzaiDealText(message)
+  const alias = groupCfg.botAlias
+  for (const i of Array.isArray(alias) ? alias : [alias]) {
+    if (i && msg.startsWith(i)) return false
+  }
+  return true
+}
+
+function isYunzaiMaster (e) {
+  if (e.isMaster) return true
+  return !!(e.user_id && cfg.master[e.self_id]?.includes(String(e.user_id)))
+}
+
+// 复刻 yunzai dealText()：拼接文本段并标准化前缀
+function yunzaiDealText (message) {
+  let msg = ''
+  for (const i of message) {
+    if (i?.type !== 'text') continue
+    let text = String(i.text || '')
+    if (cfg.bot['/→#']) text = text.replace(/^\s*\/\s*/, '#')
+    msg += text
+      .replace(/^\s*[＃井]\s*/, '#')
+      .replace(/^\s*[＊※]\s*/, '*')
+      .trim()
+  }
+  return msg
+}
+
+function markGuideCommandWindow (e) {
+  if (!e.group_id || e.message_type !== 'group') return
+  if (!isQQBotMessage({ target_id: e.group_id, bot_adapter: e.bot?.adapter?.id }, e.bot)) return
+
+  const segments = Array.isArray(e.message) ? e.message : [{ type: 'text', text: e.message }]
+  const text = segments
+    .filter(segment => segment?.type === 'text')
+    .map(segment => String(segment.text || segment.data?.text || segment.data || ''))
+    .join('')
+    .replace(/^(?:\[CQ:at,[^\]]*\]\s*|@\S+\s*)+/, '')
+    .trim()
+
+  if (text.endsWith('攻略')) {
+    markGuideActiveWindow(e.self_id, e.group_id)
+    logger.debug(`[gs-plugin] 已开启攻略主动发送窗口: target_id=${e.group_id}, bot=${e.self_id}`)
+  }
+}
+
+function applyPrefixIgnore (e) {
+  const ignoreList = Config.gsuidPrefixIgnore
+  if (!Array.isArray(ignoreList) || ignoreList.length === 0) return
+  if (!Array.isArray(e.message)) return
+
+  const textIndex = e.message.findIndex(item => item?.type === 'text')
+  if (textIndex < 0) return
+
+  let rest = String(e.message[textIndex].text || '').replace(/^\s+/, '')
+  let changed = false
+  for (;;) {
+    let matched = false
+    for (const p of ignoreList) {
+      const prefix = String(p || '').trim()
+      if (!prefix) continue
+      if (rest.startsWith(prefix)) {
+        rest = rest.slice(prefix.length)
+        matched = true
+        break
+      }
+    }
+    if (!matched) break
+    changed = true
+  }
+
+  if (changed) {
+    e.message[textIndex].text = rest
+    logger.debug(`[gs-plugin] 前缀忽略后上报: ${rest}`)
+  }
+}
 
 function addGSUidBotPrefix (e, rawEvent) {
   const prefixCfg = Config.gsuidBotPrefix
@@ -361,66 +471,6 @@ function onlyReplyAt (e, source = 'gs') {
     return false
   }
   return e
-}
-
-function reply (e) {
-  if (!Version.isTrss) {
-    const replyNew = e.reply
-    return async function () {
-      const ret = await replyNew.apply(this, arguments)
-      if (ret) {
-        setMsg({
-          message_id: ret.message_id,
-          time: ret.time,
-          seq: ret.seq,
-          rand: ret.rand,
-          user_id: e.user_id,
-          group_id: e.group_id,
-          onebot_id: Math.floor(Math.random() * Math.pow(2, 32)) | 0
-        })
-      }
-      return ret
-    }
-  } else {
-    if (e.bot?.version?.name == 'ICQQ') {
-      let replyNew
-      if (e.reply) {
-        replyNew = e.reply
-      } else {
-        replyNew = msg => {
-          if (e.isGroup) {
-            if (e.group?.sendMsg) {
-              return e.group.sendMsg(msg)
-            } else {
-              return e.bot.pickGroup(e.group_id).sendMsg(msg)
-            }
-          } else {
-            if (e.friend?.sendMsg) {
-              return e.friend.sendMsg(msg)
-            } else {
-              return e.bot.pickFriend(e.user_id).sendMsg(msg)
-            }
-          }
-        }
-      }
-      return async function () {
-        const ret = await replyNew.apply(this, arguments)
-        if (ret) {
-          setMsg({
-            message_id: ret.message_id,
-            time: ret.time,
-            seq: ret.seq,
-            rand: ret.rand,
-            user_id: e.user_id,
-            group_id: e.group_id,
-            onebot_id: Math.floor(Math.random() * Math.pow(2, 32)) | 0
-          })
-        }
-        return ret
-      }
-    }
-    return e.reply
-  }
 }
 
 export {

@@ -66,14 +66,6 @@ export default class YamlReader {
     this.save()
   }
 
-  // 彻底删除某个key
-  deleteKey(keyPath) {
-    let keys = keyPath.split('.')
-    keys = this.mapParentKeys(keys)
-    this.document.deleteIn(keys)
-    this.save()
-  }
-
   // 保存yaml文件，写入文件
   save() {
     this.isSave = true
