@@ -5,3 +5,7 @@ model/db/data.db
 model/satori
 **/test.js
 !.gitignore
+
+# Windows NTFS ADS zone markers (unwanted)
+*.Zone.Identifier
+*:Zone.Identifier

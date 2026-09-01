@@ -194,6 +194,18 @@ function tryBuildGachacodeMarkdown (content) {
   }).join('\n\n')
 }
 
+/** 按魔数识别音频格式后缀：QQBot 用 ffmpeg 按内容识别，OneBot 等依赖扩展名决定转码 */
+function sniffAudioExt (buffer) {
+  if (buffer.length < 12) return '.mp3'
+  const head = buffer.subarray(0, 12).toString('latin1')
+  if (head.startsWith('#!SILK') || head.includes('SKIP') || head.startsWith('#!AMR')) return '.silk'
+  if (head.startsWith('OggS')) return '.ogg'
+  if (head.startsWith('ID3') || (buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0)) return '.mp3'
+  if (head.startsWith('RIFF') && head.includes('WAVE')) return '.wav'
+  if (head.includes('ftyp')) return '.m4a'
+  return '.mp3'
+}
+
 /**
  * 制作gsuid发送消息
  * @param {*} data
@@ -302,6 +314,24 @@ async function makeGSUidSendMsg (data) {
               fs.writeFileSync(tmpPath, buffer)
               sendMsg.push(segment.file(tmpPath, name))
             }
+          }
+          break
+        }
+        case 'record':
+        case 'voice':
+        case 'audio': {
+          const file = msg.data
+          // GSCore 语音段通常为 base64:// 或 http(s) 链接，base64 落盘为临时文件走后端转码
+          if (typeof file === 'string' && /^https?:\/\//.test(file)) {
+            sendMsg.push(segment.record(file))
+          } else {
+            const base64 = String(file).startsWith('base64://')
+              ? String(file).slice(9)
+              : String(file)
+            const buffer = Buffer.from(base64, 'base64')
+            const tmpPath = join(TMP_DIR, `${randomUUID()}${sniffAudioExt(buffer)}`)
+            fs.writeFileSync(tmpPath, buffer)
+            sendMsg.push(segment.record(tmpPath))
           }
           break
         }
