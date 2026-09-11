@@ -43,6 +43,9 @@ export function init(ctx) {
           yesGroup: cfg.yesGroup || [],
           muteStop: cfg.muteStop !== false,
           shutdownStop: cfg.shutdownStop !== false,
+          mergeForward: cfg.mergeForward !== false,
+          mergeForwardFlatten: cfg.mergeForwardFlatten !== false,
+          mergeForwardTextOnly: cfg.mergeForwardTextOnly !== false,
           ignoreOnlyReplyAt: cfg.ignoreOnlyReplyAt !== false,
           tempMsgReport: cfg.tempMsgReport === true,
           // 保留 legacyReply 字段供旧 Web 前端读取；新前端统一使用 messageBuild。
@@ -71,6 +74,7 @@ export function init(ctx) {
         'pluginEnabled', 'enabledBots', 'servers', 'groupIntercept',
         'noMsgStart', 'noMsgInclude', 'noGroup', 'yesGroup',
         'muteStop', 'shutdownStop', 'ignoreOnlyReplyAt', 'tempMsgReport', 'legacyReply', 'messageBuild',
+        'mergeForward', 'mergeForwardFlatten', 'mergeForwardTextOnly',
         'disconnectToMaster', 'reconnectToMaster', 'firstconnectToMaster',
         'msgStoreTime', 'taskQueue', 'heartbeatInterval', 'gsuidBotPrefix', 'gsuidPrefixIgnore'
       ]

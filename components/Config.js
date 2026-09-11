@@ -126,6 +126,18 @@ class Config {
     return this.getDefOrConfig('gs-config').shutdownStop !== false
   }
 
+  get mergeForward () {
+    return this.getDefOrConfig('gs-config').mergeForward !== false
+  }
+
+  get mergeForwardFlatten () {
+    return this.getDefOrConfig('gs-config').mergeForwardFlatten !== false
+  }
+
+  get mergeForwardTextOnly () {
+    return this.getDefOrConfig('gs-config').mergeForwardTextOnly !== false
+  }
+
   get ignoreOnlyReplyAt () {
     return this.getDefOrConfig('gs-config').ignoreOnlyReplyAt
   }

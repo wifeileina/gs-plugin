@@ -66,6 +66,12 @@ yesGroup: []
 muteStop: false
 # 关机状态联动：yunzai 执行 #关机 后停止消息上报，#开机 后自动恢复
 shutdownStop: true
+# 合并转发：收到合并转发时是否展开节点并上报到 GS
+mergeForward: true
+# 合并转发平铺：开启后（默认）将合并转发展开为普通消息段上报；关闭则不展开解析
+mergeForwardFlatten: true
+# 合并转发仅文字：开启后只上报合并转发中的文字，忽略图片/文件/语音等
+mergeForwardTextOnly: true
 # 临时会话是否上报
 tempMsgReport: false
 # 消息构造：QQBot 回包的 Legacy 与主动消息

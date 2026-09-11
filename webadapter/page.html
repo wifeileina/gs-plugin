@@ -362,6 +362,9 @@ select { width: 140px; }
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;">
           <div class="form-row"><label>禁言拦截</label><div class="toggle-wrap"><div class="toggle" id="muteStop" onclick="toggle(this)"></div></div></div>
           <div class="form-row"><label>关机联动</label><div class="toggle-wrap"><div class="toggle" id="shutdownStop" onclick="toggle(this)"></div><span class="hint">Yunzai #关机 后停止上报</span></div></div>
+          <div class="form-row"><label>合并转发</label><div class="toggle-wrap"><div class="toggle" id="mergeForward" onclick="toggle(this)"></div><span class="hint">收到合并转发时展开上报</span></div></div>
+          <div class="form-row"><label>合并转发平铺</label><div class="toggle-wrap"><div class="toggle" id="mergeForwardFlatten" onclick="toggle(this)"></div><span class="hint">展开为普通消息上报</span></div></div>
+          <div class="form-row"><label>仅合并转发文字</label><div class="toggle-wrap"><div class="toggle" id="mergeForwardTextOnly" onclick="toggle(this)"></div><span class="hint">合并转发只上报文字</span></div></div>
           <div class="form-row"><label>忽略仅艾特</label><div class="toggle-wrap"><div class="toggle" id="ignoreOnlyReplyAt" onclick="toggle(this)"></div></div></div>
           <div class="form-row"><label>临时会话</label><div class="toggle-wrap"><div class="toggle" id="tempMsgReport" onclick="toggle(this)"></div></div></div>
           <div class="form-row"><label>消息存储</label><input type="number" id="msgStoreTime" min="0" onchange="computeDirty()"><span class="hint">秒</span></div>
@@ -392,7 +395,10 @@ function buildConfigBody() {
     noMsgInclude: JSON.parse(JSON.stringify(configData.noMsgInclude || [])),
     noGroup: JSON.parse(JSON.stringify(configData.noGroup || [])),
     yesGroup: JSON.parse(JSON.stringify(configData.yesGroup || [])),
-    muteStop: isOn('muteStop'), shutdownStop: isOn('shutdownStop'), ignoreOnlyReplyAt: isOn('ignoreOnlyReplyAt'),
+    muteStop: isOn('muteStop'), shutdownStop: isOn('shutdownStop'),
+    mergeForward: isOn('mergeForward'),
+    mergeForwardFlatten: isOn('mergeForwardFlatten'), mergeForwardTextOnly: isOn('mergeForwardTextOnly'),
+    ignoreOnlyReplyAt: isOn('ignoreOnlyReplyAt'),
     tempMsgReport: isOn('tempMsgReport'),
     messageBuild: {
       legacyReply: {
@@ -501,6 +507,9 @@ function renderAll() {
   renderTagArea('gsuidPrefixIgnoreTags', Array.isArray(d.gsuidPrefixIgnore) ? d.gsuidPrefixIgnore : [], 'gsuidPrefixIgnore')
   setToggle('muteStop', d.muteStop)
   setToggle('shutdownStop', d.shutdownStop !== false)
+  setToggle('mergeForward', d.mergeForward !== false)
+  setToggle('mergeForwardFlatten', d.mergeForwardFlatten !== false)
+  setToggle('mergeForwardTextOnly', d.mergeForwardTextOnly !== false)
   setToggle('ignoreOnlyReplyAt', d.ignoreOnlyReplyAt)
   setToggle('tempMsgReport', d.tempMsgReport)
   const messageBuild = ensureMessageBuild()

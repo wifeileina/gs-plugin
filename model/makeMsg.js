@@ -13,37 +13,21 @@ import fetch from 'node-fetch'
 async function makeGSUidReportMsg (e, botId = 'onebot') {
   let message = []
   let msg = e.message
+  // 引用（reply）上报：拉取被引用消息原文，让 AI 能读到引用内容
+  let replyId = ''
+  let quoted = null
+  let appended = false
   if (e.source) {
-    message.push({
-      type: 'reply',
-      data: String(e.source.message_id)
-    })
-    // 从被引用消息中提取图片，注入到 content 中
-    try {
-      const bot = Bot[e.self_id] || Bot
-      if (typeof bot?.getMsg === 'function') {
-        const sourceMsg = await bot.getMsg(e.source.message_id)
-        if (sourceMsg?.message && Array.isArray(sourceMsg.message)) {
-          for (const seg of sourceMsg.message) {
-            if (seg.type === 'image') {
-              message.push({
-                type: 'image',
-                data: seg.url || seg.file
-              })
-            }
-          }
+    replyId = String(e.source.message_id)
+    quoted = await fetchSourceMessage(e, replyId) || e.source
+    if (Array.isArray(e.source.images) && e.source.images.length) {
+      // Red 协议自带引用图，合并进被引用消息的 message 里统一处理
+      const base = (quoted && Array.isArray(quoted.message)) ? quoted.message : []
+      if (!base.some(seg => seg?.type === 'image')) {
+        quoted = {
+          ...(quoted || {}),
+          message: base.concat(e.source.images.map(img => ({ type: 'image', data: { url: img.url || img.file } })))
         }
-      }
-    } catch (_) {
-      // 无法获取被引用消息时静默忽略
-    }
-    // 如果 e.source 本身包含图片信息（Red 协议），也一并提取
-    if (Array.isArray(e.source.images)) {
-      for (const img of e.source.images) {
-        message.push({
-          type: 'image',
-          data: img.url || img.file
-        })
       }
     }
   }
@@ -99,15 +83,35 @@ async function makeGSUidReportMsg (e, botId = 'onebot') {
         }
         break
       }
-      case 'reply':
-        message.push({
-          type: 'reply',
-          data: String(i.id)
-        })
+      case 'reply': {
+        // 与 e.source 重复引用时只处理一次；否则从 reply 段拉取被引用消息
+        const segReplyId = String(i.id ?? i.data?.id ?? i.message_id ?? '')
+        if (segReplyId && segReplyId !== replyId) {
+          replyId = segReplyId
+          const segQuoted = await fetchSourceMessage(e, segReplyId)
+          if (segQuoted) {
+            await appendReply(message, segReplyId, segQuoted, e)
+            appended = true
+          }
+        }
         break
+      }
+      case 'node':
+      case 'forward':
+      case 'forward_msg': {
+        // 收到的合并转发：开关开启时展开节点上报，关闭时跳过
+        if (Config.mergeForward !== false) {
+          await appendGSUidNode(message, i.data ?? i, e)
+        }
+        break
+      }
       default:
         break
     }
+  }
+  // e.source 引用在此统一组装（若已由 reply 段处理则跳过）
+  if (replyId && !appended) {
+    await appendReply(message, replyId, quoted, e)
   }
   if (message.length == 0) {
     return false
@@ -147,6 +151,224 @@ async function makeGSUidReportMsg (e, botId = 'onebot') {
     MessageReceive.user_type = 'direct'
   }
   return Buffer.from(JSON.stringify(MessageReceive))
+}
+
+// —— 收到的合并转发展开 ——
+const NODE_MAX_DEPTH = 3
+const NODE_MARK = '[合并转发]'
+
+function stringifyGSUidId (v) {
+  return v === undefined || v === null || v === '' ? '' : String(v)
+}
+
+// 转发段里的 url 常被反引号包裹（`` `https://...` ``），去掉首尾反引号再上报
+function cleanGSUidUrl (v) {
+  if (typeof v !== 'string') return v
+  return v.replace(/^`+|`+$/g, '')
+}
+
+function getGSUidForwardId (value) {
+  if (typeof value === 'string' || typeof value === 'number') return stringifyGSUidId(value)
+  if (!value || typeof value !== 'object') return ''
+  return stringifyGSUidId(value.id || value.message_id || value.data?.id || value.data?.message_id)
+}
+
+/** OneBot：按合并转发 id 拉取节点内容 */
+async function fetchGSUidForwardItems (e, forwardId, depth, seen) {
+  if (!forwardId || depth >= NODE_MAX_DEPTH || seen.has(forwardId)) return [{ type: 'text', data: NODE_MARK }]
+  seen.add(forwardId)
+  try {
+    const bot = e?.bot || Bot[e?.self_id] || Bot
+    if (typeof bot?.sendApi !== 'function') throw new Error('当前实例不支持 sendApi')
+    const response = await bot.sendApi('get_forward_msg', { message_id: forwardId })
+    const messages = Array.isArray(response)
+      ? response
+      : response?.data?.messages || response?.messages || response?.data
+    if (!Array.isArray(messages)) return [{ type: 'text', data: NODE_MARK }]
+    return flattenGSUidForwardItems(e, messages, depth + 1, seen)
+  } catch (_) {
+    return [{ type: 'text', data: NODE_MARK }]
+  }
+}
+
+/**
+ * 递归展平转发内容为 gs 段。
+ * 兼容三种结构：原生 node(data 为节点数组)、命名节点({sender/user_id,nickname,message})、纯段。
+ */
+async function expandGSUidNode (result, node, e, depth, seen) {
+  if (Array.isArray(node)) {
+    for (const el of node) await expandGSUidNode(result, el, e, depth, seen)
+    return
+  }
+  if (!node || typeof node !== 'object') return
+
+  const nickname = node.sender?.nickname || node.name || ''
+  const inner = node.type === 'node' ? (node.data ?? node) : node
+
+// 内联可展开的子内容：content / message / data
+  const childArray = Array.isArray(inner)
+    ? inner
+    : [inner?.content, inner?.message, inner?.data, inner?.frame].find(v => Array.isArray(v))
+
+  if (childArray) {
+    if (nickname) result.push({ type: 'text', data: `${nickname}:` })
+    const innerForwardId = ['forward', 'forward_msg'].includes(node.type)
+      ? (getGSUidForwardId(node) || getGSUidForwardId(inner))
+      : ''
+    // 嵌套转发无内联内容时按 id 拉取
+    if (innerForwardId && childArray.length === 0) {
+      result.push({ type: 'text', data: NODE_MARK })
+      result.push(...await fetchGSUidForwardItems(e, innerForwardId, depth, seen))
+      return
+    }
+    await expandGSUidNode(result, childArray, e, depth, seen)
+    return
+  }
+
+  // 叶子段
+  const leaf = inner ?? node
+  const t = node.type || leaf.type
+  if (t === 'text') {
+    const text = leaf.text ?? leaf.data?.text ?? leaf.data
+    if (typeof text === 'string' && text) result.push({ type: 'text', data: text })
+  } else if (t === 'image') {
+    const image = cleanGSUidUrl(leaf.url || leaf.file || leaf.data?.url || leaf.data?.file)
+    if (image) result.push({ type: 'image', data: stringifyGSUidId(image) })
+  } else if (t === 'at') {
+    result.push({ type: 'at', data: stringifyGSUidId(leaf.qq || leaf.data?.qq || leaf.data) })
+  } else if (t === 'file') {
+    const file = cleanGSUidUrl(leaf.url || leaf.file || leaf.data?.url || leaf.data?.file)
+    if (file) result.push({ type: 'file', data: `file|${file}` })
+  } else if (t === 'record' || t === 'voice') {
+    const rec = cleanGSUidUrl(leaf.url || leaf.file || leaf.data?.url || leaf.data?.file)
+    if (rec) result.push({ type: 'record', data: stringifyGSUidId(rec) })
+  }
+}
+
+/** 递归展平转发节点为 gs 消息段 */
+async function flattenGSUidForwardItems (e, items, depth, seen) {
+  const result = []
+  await expandGSUidNode(result, items, e, depth, seen)
+  return result
+}
+
+/** 把转发段并入上报内容：优先内联展开，内联为空时按 id 拉取，输出 gs {type:'node',data} */
+async function appendGSUidNode (message, node, e) {
+  const items = []
+  await expandGSUidNode(items, node, e, 0, new Set())
+  if (!items.length) {
+    const forwardId = getGSUidForwardId(node)
+    if (forwardId) {
+      items.push({ type: 'text', data: NODE_MARK })
+      items.push(...await fetchGSUidForwardItems(e, forwardId, 0, new Set()))
+    }
+  }
+  if (!items.length) return
+  // 平铺开启（默认）：按仅文字开关平铺；平铺关闭：回退 node 原样上报
+  pushFlatOrNode(message, items)
+}
+
+/** 合并转发展开结果的统一上报：平铺或回退 node（由 mergeForwardFlatten / mergeForwardTextOnly 决定） */
+function pushFlatOrNode (message, items) {
+  if (Config.mergeForwardFlatten) {
+    message.push(...(Config.mergeForwardTextOnly ? items.filter(s => s.type === 'text') : items))
+  } else {
+    message.push({ type: 'node', data: items })
+  }
+}
+
+// —— 引用（reply）上报：让 AI 能读到被引用内容 ——
+function getReplyText (reply) {
+  if (!reply || typeof reply !== 'object') return ''
+  if (reply.text || reply.message_str) return String(reply.text || reply.message_str)
+  if (typeof reply.message === 'string') return reply.message.replace(/\[CQ:[^\]]+\]/g, '').trim()
+  if (Array.isArray(reply.message)) {
+    return reply.message
+      .filter(item => item?.type === 'text')
+      .map(item => item.text || item.data?.text || item.data?.content || (typeof item.data === 'string' ? item.data : ''))
+      .join('')
+  }
+  if (typeof reply.raw_message === 'string') return reply.raw_message.replace(/\[CQ:[^\]]+\]/g, '').trim()
+  return ''
+}
+
+/** 把合并转发展开结果转成可读文字摘要（图片/语音等用占位），供 AI 读引用内容 */
+function formatNodePreview (items, quotedText = '') {
+  const lines = [NODE_MARK]
+  if (quotedText && !quotedText.includes(NODE_MARK)) lines.push(quotedText)
+  let pendingNickname = ''
+  for (const item of items) {
+    if (item.type === 'text' && item.data) {
+      const text = String(item.data).trim()
+      if (text.endsWith(':') || text.endsWith('：')) {
+        pendingNickname = `${text.slice(0, -1)}：`
+        continue
+      }
+      lines.push(`${pendingNickname}${text}`)
+      pendingNickname = ''
+    } else if (item.type === 'image') {
+      lines.push(`${pendingNickname}[图片]`)
+      pendingNickname = ''
+    } else if (item.type === 'record' || item.type === 'voice') {
+      lines.push(`${pendingNickname}[语音]`)
+      pendingNickname = ''
+    } else if (item.type === 'video') {
+      lines.push(`${pendingNickname}[视频]`)
+      pendingNickname = ''
+    } else if (item.type === 'file') {
+      lines.push(`${pendingNickname}[文件]`)
+      pendingNickname = ''
+    }
+  }
+  if (pendingNickname) lines.push(pendingNickname)
+  return lines.filter(Boolean).join('\n')
+}
+
+/** 拉取被引用消息对象，兼容 getMsg / sendApi(get_msg) */
+async function fetchSourceMessage (e, id) {
+  try {
+    const bot = Bot[e.self_id] || Bot
+    const response = typeof bot?.getMsg === 'function'
+      ? await bot.getMsg(id)
+      : typeof bot?.sendApi === 'function'
+        ? (await bot.sendApi('get_msg', { message_id: id }))
+        : null
+    const data = response?.data || response
+    if (Array.isArray(data?.message) || typeof data?.message === 'string' || typeof data?.raw_message === 'string') {
+      return data
+    }
+    return null
+  } catch (err) {
+    logger.debug(`[gs-plugin] 获取被引用消息 ${id} 失败: ${err.message}`)
+    return null
+  }
+}
+
+/** 按官方方式上报引用：reply 段带被引用正文，reply_id 段带原消息 id，并展开被引用消息里的图片/合并转发 */
+async function appendReply (message, replyId, quoted, e) {
+  if (replyId != null && replyId !== '') message.push({ type: 'reply_id', data: String(replyId) })
+
+  const quotedMsg = Array.isArray(quoted?.message) ? quoted.message : []
+  for (const seg of quotedMsg) {
+    if (seg?.type === 'image') {
+      const img = seg.url || seg.file || seg.data?.url || seg.data?.file
+      if (img) message.push({ type: 'image', data: String(img).trim() })
+    }
+  }
+
+  const forward = quotedMsg.find(item => item?.type === 'forward' || item?.type === 'forward_msg')
+  let nodeItems = []
+  if (forward) {
+    const direct = forward.data?.content || forward.data?.message
+    nodeItems = Array.isArray(direct)
+      ? await flattenGSUidForwardItems(e, direct, 0, new Set())
+      : await fetchGSUidForwardItems(e, getGSUidForwardId(forward.data), 0, new Set())
+  }
+
+  const quotedText = getReplyText(quoted)
+  const replyText = nodeItems.length ? formatNodePreview(nodeItems, quotedText) : quotedText
+  if (replyText) message.push({ type: 'reply', data: replyText })
+  if (nodeItems.length) pushFlatOrNode(message, nodeItems)
 }
 
 const CODE_RE = /^兑换码[:：]\s*(.+?)\s*$/
@@ -212,6 +434,7 @@ function sniffAudioExt (buffer) {
  */
 async function makeGSUidSendMsg (data) {
   let content = data.content; let quote = null; let bot = Bot[data.bot_self_id] || Bot
+  const replyIdData = (Array.isArray(content) ? content : []).find(s => s?.type === 'reply_id')?.data
   const sendMsg = []
   const adapter = bot?.adapter
   const botSelfId = String(data.bot_self_id).split(':')[0]
@@ -263,8 +486,15 @@ async function makeGSUidSendMsg (data) {
           sendMsg.push(segment.at(Number(msg.data) || String(msg.data)))
           break
         case 'reply':
-          quote = await bot.getMsg?.(msg.data) || await bot[target].getChatHistory?.(msg.data, 1)?.[0] || null
-          break
+      case 'reply_id': {
+        // GS 可能回 reply_id（原消息 id）或 reply（引用文字），优先用 reply_id 作为引用
+        const rid = String(replyIdData || msg.data || '').trim()
+        const quotedId = /^\d+$/.test(rid) || /^[0-9a-f]{16,}$/i.test(rid) ? rid : null
+        if (quotedId) {
+          quote = await bot.getMsg?.(quotedId) || await bot[target].getChatHistory?.(quotedId, 1)?.[0] || quote || null
+        }
+        break
+      }
         case 'file':{
           let file = msg.data.split('|')
           let buffer = Buffer.from(file[1], 'base64')

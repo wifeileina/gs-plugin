@@ -411,6 +411,28 @@ export function supportGuoba() {
         },
         {
           component: 'Divider',
+          label: '合并转发'
+        },
+        {
+          field: 'gs.mergeForward',
+          label: '合并转发',
+          bottomHelpMessage: '收到合并转发时，展开节点内容并上报到 GS',
+          component: 'Switch',
+        },
+        {
+          field: 'gs.mergeForwardFlatten',
+          label: '合并转发平铺',
+          bottomHelpMessage: '开启后将合并转发展开为普通消息段上报；关闭则不展开解析',
+          component: 'Switch',
+        },
+        {
+          field: 'gs.mergeForwardTextOnly',
+          label: '合并转发仅文字',
+          bottomHelpMessage: '开启后只上报合并转发中的文字，忽略图片/文件/语音等',
+          component: 'Switch',
+        },
+        {
+          component: 'Divider',
           label: '其他设置'
         },
         {
@@ -479,6 +501,12 @@ export function supportGuoba() {
         if (gs.pluginEnabled === undefined) gs.pluginEnabled = false
         // 确保 shutdownStop 有默认值
         if (gs.shutdownStop === undefined) gs.shutdownStop = true
+        // 确保 mergeForward 有默认值
+        if (gs.mergeForward === undefined) gs.mergeForward = true
+        // 确保 mergeForwardTextOnly 有默认值
+        if (gs.mergeForwardTextOnly === undefined) gs.mergeForwardTextOnly = true
+        // 确保 mergeForwardFlatten 有默认值
+        if (gs.mergeForwardFlatten === undefined) gs.mergeForwardFlatten = true
         const messageBuild = Config.messageBuild
         gs.messageBuildLegacyReplyEnabled = messageBuild.legacyReply.enabled
         gs.messageBuildLegacyReplyGroups = messageBuild.legacyReply.groups
