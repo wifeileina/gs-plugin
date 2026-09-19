@@ -7,6 +7,9 @@ import {
   shouldForceActiveMessage
 } from './MessageBuild.js'
 
+/** 兑换码跨回包去抖合并的静默窗口（毫秒）：窗口内连续到达的兑换码合并为一条发送 */
+const GACHA_BATCH_WINDOW = 2000
+
 /** 判断是否应该对该消息启用 legacy 模式 */
 function shouldUseLegacy (legacyCfg, scopeGroupId, botSelfId) {
   if (!legacyCfg?.enabled) return false
@@ -156,9 +159,36 @@ export default class Client {
     }
 
     const isQQBot = isQQBotMessage(data, bot)
-    const { sendMsg } = await makeGSUidSendMsg(data)
-    if (!sendMsg.length) return
+    const gachaKey = `${data.bot_self_id}:${data.target_type}:${data.target_id}`
+    const gachaBatch = this.gachaBatch?.[gachaKey]
+    const { sendMsg, quote, gachaMdList, isPureGacha } = await makeGSUidSendMsg(data, gachaBatch?.mdList)
 
+    const flushGacha = async () => {
+      const batch = this.gachaBatch?.[gachaKey]
+      if (!batch) return
+      clearTimeout(batch.timer)
+      delete this.gachaBatch[gachaKey]
+      logger.mark(`[gs-plugin] 合并发送兑换码 ${batch.mdList.length} 条`)
+      await this.dispatchBuiltMessage(batch.ctx, batch.sendMsg)
+    }
+
+    if (isPureGacha) {
+      // 连续到达的兑换码累积进同一条 markdown，窗口内静默，窗口到才发送
+      if (gachaBatch) clearTimeout(gachaBatch.timer)
+      this.gachaBatch = this.gachaBatch || {}
+      this.gachaBatch[gachaKey] = {
+        ctx: { data, bot, isQQBot },
+        mdList: gachaMdList,
+        sendMsg,
+        timer: setTimeout(flushGacha, GACHA_BATCH_WINDOW)
+      }
+      logger.mark(`[gs-plugin] 兑换码进入合并缓冲: 当前 ${gachaMdList.length} 条`)
+      return
+    }
+
+    // 非兑换码回包：先冲刷未发送的兑换码批次，保持顺序
+    if (gachaBatch) await flushGacha()
+    if (!sendMsg.length) return
     await this.dispatchBuiltMessage({ data, bot, isQQBot }, sendMsg)
   }
 

@@ -432,9 +432,10 @@ function sniffAudioExt (buffer) {
  * 制作gsuid发送消息
  * @param {*} data
  */
-async function makeGSUidSendMsg (data) {
+async function makeGSUidSendMsg (data, prevGachaMdList) {
   let content = data.content; let quote = null; let bot = Bot[data.bot_self_id] || Bot
   const replyIdData = (Array.isArray(content) ? content : []).find(s => s?.type === 'reply_id')?.data
+  const gachaMdList = Array.isArray(prevGachaMdList) ? [...prevGachaMdList] : []
   const sendMsg = []
   const adapter = bot?.adapter
   const botSelfId = String(data.bot_self_id).split(':')[0]
@@ -470,13 +471,13 @@ async function makeGSUidSendMsg (data) {
           sendMsg.push(segment.image(msg.data))
           break
         case 'text': {
+          // 兑换码：先收集不发送，循环结束后合并为一条 Markdown 统一发送
           const gachaMarkdown = isQQBot
             ? tryBuildGachacodeMarkdown(String(msg.data))
             : null
 
           if (gachaMarkdown) {
-            logger.mark('[gs-plugin] QQBot 兑换码文本已转为原生 Markdown')
-            sendMsg.push(toMD(gachaMarkdown))
+            gachaMdList.push(gachaMarkdown)
             break
           }
           sendMsg.push(msg.data)
@@ -565,9 +566,18 @@ async function makeGSUidSendMsg (data) {
           }
           break
         }
-        case 'node':{
+        case 'node': {
+          const nodeSub = Array.isArray(msg.data) ? msg.data : [msg.data]
+          // QQBot 下先把 node 内子段当普通 content 复用构建：若全部是兑换码则合并成一条 markdown 发送
+          if (isQQBot) {
+            const nodeSend = await makeGSUidSendMsg({ content: nodeSub, target_type: data.target_type, target_id: data.target_id })
+            if (nodeSend.isPureGacha) {
+              sendMsg.push(...nodeSend.sendMsg)
+              break
+            }
+          }
           let arr = []
-          for (const i of msg.data) {
+          for (const i of nodeSub) {
             const { sendMsg: message } = await makeGSUidSendMsg({ content: [i], target_type: data.target_type, target_id: data.target_id })
             arr.push({
               message,
@@ -599,8 +609,7 @@ async function makeGSUidSendMsg (data) {
             : null
 
           if (markdown) {
-            logger.mark('[gs-plugin] QQBot 兑换码 markdown 段已转为原生 Markdown')
-            sendMsg.push(toMD(markdown))
+            gachaMdList.push(markdown)
             break
           }
           sendMsg.push(toMD(msg.data))
@@ -610,8 +619,18 @@ async function makeGSUidSendMsg (data) {
           break
       }
     }
+    // 把分散的兑换码合并为一条 Markdown 统一发送
+    if (gachaMdList.length) {
+      logger.mark(`[gs-plugin] 合并 ${gachaMdList.length} 个兑换码为一条 Markdown`)
+      sendMsg.push(toMD(gachaMdList.join('\n\n')))
+    }
   }
-  return { sendMsg, quote }
+  return {
+    sendMsg,
+    quote,
+    gachaMdList,
+    isPureGacha: sendMsg.length === 1 && gachaMdList.length > 0
+  }
 }
 
 function toMD (data) {
