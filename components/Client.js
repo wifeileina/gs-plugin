@@ -168,7 +168,6 @@ export default class Client {
       if (!batch) return
       clearTimeout(batch.timer)
       delete this.gachaBatch[gachaKey]
-      logger.mark(`[gs-plugin] 合并发送兑换码 ${batch.mdList.length} 条`)
       await this.dispatchBuiltMessage(batch.ctx, batch.sendMsg)
     }
 
@@ -182,7 +181,6 @@ export default class Client {
         sendMsg,
         timer: setTimeout(flushGacha, GACHA_BATCH_WINDOW)
       }
-      logger.mark(`[gs-plugin] 兑换码进入合并缓冲: 当前 ${gachaMdList.length} 条`)
       return
     }
 

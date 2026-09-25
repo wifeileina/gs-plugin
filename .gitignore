@@ -9,3 +9,7 @@ model/satori
 # Windows NTFS ADS zone markers (unwanted)
 *.Zone.Identifier
 *:Zone.Identifier
+
+# Local backup files
+*.bak
+*.bak*

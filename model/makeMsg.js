@@ -445,13 +445,6 @@ async function makeGSUidSendMsg (data, prevGachaMdList) {
   // QQBot 群聊和私聊的目标 ID 是 32 位十六进制字符串；GSUID 回包缺 bot_self_id 时用作兑换码转换兜底。
   const isQQBotTarget = /^(?:[0-9a-f]{32})$/i.test(String(data.target_id || '').split(':').pop())
   const isQQBot = isQQBotAdapter || isQQBotAccount || isQQBotTarget
-  const gachaSegments = content.filter(msg => {
-    const value = typeof msg.data === 'string' ? msg.data : msg.data?.content || msg.data?.text
-    return typeof value === 'string' && value.includes('兑换码')
-  })
-  if (gachaSegments.length) {
-    logger.mark(`[gs-plugin] 兑换码响应入口: bot=${botSelfId}, qqbot=${isQQBot}, segments=${gachaSegments.map(msg => msg.type).join(',')}`)
-  }
   if (content[0].type.startsWith('log')) {
     logger.info(content[0].data)
   } else {
@@ -621,7 +614,6 @@ async function makeGSUidSendMsg (data, prevGachaMdList) {
     }
     // 把分散的兑换码合并为一条 Markdown 统一发送
     if (gachaMdList.length) {
-      logger.mark(`[gs-plugin] 合并 ${gachaMdList.length} 个兑换码为一条 Markdown`)
       sendMsg.push(toMD(gachaMdList.join('\n\n')))
     }
   }
