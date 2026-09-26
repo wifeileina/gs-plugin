@@ -218,10 +218,33 @@ async function initWebSocket () {
   }
 }
 
+/**
+ * 指令控制：开启对 Core 的连接（运行时生效，不写入配置）
+ */
+async function enableGSUid () {
+  clearWebSocket()
+  sendSocketList = []
+  for (const server of Config.servers) {
+    await _createBotConnections(server)
+  }
+  logger.mark(`[gs-plugin] 已开启，当前连接 ${sendSocketList.length} 个`)
+}
+
+/**
+ * 指令控制：关闭对 Core 的连接（运行时生效，不写入配置）
+ */
+function disableGSUid () {
+  clearWebSocket()
+  sendSocketList = []
+  logger.mark('[gs-plugin] 已关闭，已断开所有 Core 连接')
+}
+
 export {
   initWebSocket,
   clearWebSocket,
   modifyWebSocket,
+  enableGSUid,
+  disableGSUid,
   allSocketList,
   setAllSocketList,
   sendSocketList,
