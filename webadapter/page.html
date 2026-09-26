@@ -4,380 +4,665 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Gs适配器</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* 表面层次：页面底 → 卡片 → 下沉面 */
+  --bg: #f5f7fa;
+  --bg-tint: rgba(37, 99, 235, .055);
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #f1f4f8;
+
+  /* 描边 */
+  --line: #e8ebf1;
+  --line-2: #d9dee8;
+  --line-3: #c6cdda;
+
+  /* 文字层次 */
+  --text: #1a1f2b;
+  --text-2: #5a6577;
+  --text-3: #8e98a8;
+  --text-4: #b4bcc8;
+
+  /* 主色 */
+  --accent: #2563eb;
+  --accent-2: #1d4ed8;
+  --accent-3: #3b82f6;
+  --accent-soft: #eff4ff;
+  --accent-line: #c8dafd;
+  --accent-ring: rgba(37, 99, 235, .17);
+
+  /* 中性实心（次要控件用） */
+  --ink: #2b3242;
+
+  /* 语义色 */
+  --ok: #0f9d63;
+  --ok-soft: #e9f8f1;
+  --danger: #dc2626;
+  --danger-soft: #fef3f2;
+  --warn: #c2740a;
+
+  --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .04);
+  --shadow-md: 0 4px 12px -2px rgba(16, 24, 40, .08), 0 2px 6px -1px rgba(16, 24, 40, .04);
+  --shadow-lg: 0 12px 32px -8px rgba(16, 24, 40, .16), 0 2px 8px -2px rgba(16, 24, 40, .06);
+}
+
+html { -webkit-text-size-adjust: 100%; }
+
 body {
-  background: #f0f1f3;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", sans-serif;
-  color: #333; line-height: 1.5; padding: 16px;
+  min-height: 100vh;
+  background-color: var(--bg);
+  background-image: radial-gradient(900px 320px at 50% -140px, var(--bg-tint), transparent 70%);
+  background-repeat: no-repeat;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.6;
+  padding-bottom: 110px;
+  -webkit-font-smoothing: antialiased;
 }
 
-.layout { display: flex; gap: 12px; max-width: 900px; margin: 0 auto; align-items: flex-start; }
+/* ── 顶栏 ── */
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(255, 255, 255, .82);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .03);
+}
+.topbar-inner {
+  max-width: 780px; margin: 0 auto; padding: 0 20px;
+  height: 58px; display: flex; align-items: center; gap: 14px;
+}
+.brand { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+.brand-mark {
+  width: 24px; height: 24px; border-radius: 7px;
+  background: linear-gradient(160deg, var(--accent-3), var(--accent-2));
+  color: #fff; font-size: 12px; font-weight: 700; line-height: 1;
+  display: grid; place-items: center;
+  box-shadow: 0 2px 6px -1px rgba(37, 99, 235, .45);
+}
+.brand-name { font-size: 14px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; }
 
-/* ── 左侧导航 ── */
-.nav-side {
-  flex-shrink: 0; width: 180px;
-  display: flex; flex-direction: column;
-  background: #f8f9fa; border-radius: 10px; overflow: hidden;
-  border: 1px solid #e8eaed;
-  position: sticky; top: 16px;
+.tabs {
+  display: flex; gap: 2px; padding: 3px;
+  background: var(--surface-3); border-radius: 10px;
+  border: 1px solid var(--line);
 }
-.nav-header {
-  padding: 14px 16px; border-bottom: 1px solid #e8eaed;
-  font-size: 15px; font-weight: 700; color: #1a1a2e;
-  display: flex; align-items: center; gap: 8px;
-}
-.nav-items { flex: 1; padding: 6px 0; }
-.nav-tab {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 16px;
-  font-size: 13px; font-weight: 500; color: #6b7280;
-  cursor: pointer; transition: all 0.15s;
+.tab {
   border: none; background: transparent; font-family: inherit;
-  text-decoration: none; position: relative;
+  padding: 6px 12px; border-radius: 7px;
+  font-size: 13px; color: var(--text-2); cursor: pointer;
+  transition: background .15s, color .15s, box-shadow .15s;
+  white-space: nowrap; -webkit-tap-highlight-color: transparent;
 }
-.nav-tab:hover { color: #333; background: #f0f1f3; }
-.nav-tab.active { color: #4f46e5; background: #eef0ff; font-weight: 600; }
-.nav-tab.active::before {
-  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
-  width: 3px; background: #4f46e5; border-radius: 0 2px 2px 0;
-}
-.nav-tab .ico { font-size: 15px; flex-shrink: 0; }
-.nav-footer {
-  padding: 10px 16px; border-top: 1px solid #e8eaed;
-  font-size: 12px; color: #6b7280;
-  display: flex; align-items: center; gap: 6px;
+.tab:hover { color: var(--text); }
+.tab.active {
+  background: var(--surface); color: var(--accent-2); font-weight: 600;
+  box-shadow: var(--shadow-sm), 0 0 0 1px var(--accent-line);
 }
 
-/* ── 内容区 ── */
-.content { flex: 1; min-width: 0; }
-.content-header {
-  background: #fff; border-radius: 10px;
-  padding: 14px 20px; margin-bottom: 12px;
-  display: flex; align-items: center; justify-content: space-between;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+.conn {
+  margin-left: auto; display: flex; align-items: center; gap: 7px;
+  font-size: 12px; color: var(--text-2); white-space: nowrap; flex-shrink: 0;
+  background: var(--surface); border: 1px solid var(--line);
+  padding: 4px 10px; border-radius: 20px;
 }
-.content-header h1 { font-size: 17px; font-weight: 700; color: #111827; }
-.content-header .sub { margin-top: 3px; color: #9ca3af; font-size: 12px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-4); flex-shrink: 0; }
+.status-dot.on { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); animation: pulse 2.4s ease-in-out infinite; }
+.status-dot.off { background: var(--text-4); }
 
-.card {
-  background: #fff; border-radius: 10px;
-  padding: 16px 20px; margin-bottom: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+/* ── 页面 ── */
+.page { max-width: 780px; margin: 0 auto; padding: 30px 20px 0; }
+.page-head { margin-bottom: 22px; }
+.page-head h1 { font-size: 22px; font-weight: 700; letter-spacing: -.015em; }
+.page-sub { margin-top: 6px; font-size: 13px; color: var(--text-3); }
+
+.panel { display: none; }
+.panel.active { display: block; animation: fadeIn .24s ease both; }
+
+/* ── 分组 ── */
+.group {
+  border: 1px solid var(--line); border-radius: 14px;
+  background: var(--surface); overflow: hidden; margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.group-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 13px 18px;
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  border-bottom: 1px solid var(--line);
+}
+.group-head h2 {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; letter-spacing: .01em; color: var(--text);
+}
+.group-head h2::before {
+  content: ''; width: 6px; height: 6px; border-radius: 2px;
+  background: linear-gradient(160deg, var(--accent-3), var(--accent-2));
+  flex-shrink: 0;
+}
+.group-note {
+  padding: 13px 18px; font-size: 12.5px; color: var(--text-2); line-height: 1.65;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+.group-note code {
+  font-family: var(--mono); font-size: 11.5px; color: var(--accent-2);
+  background: var(--accent-soft); border: 1px solid var(--accent-line);
+  padding: 1px 5px; border-radius: 5px;
 }
 
-.page-header { display: flex; align-items: center; justify-content: space-between; }
-.page-header h1 { font-size: 16px; font-weight: 700; color: #1a1a2e; }
-.page-header .sub { margin-top: 2px; color: #999; font-size: 11px; }
+/* ── 设置项行 ── */
+.field {
+  display: flex; align-items: center; gap: 16px;
+  padding: 13px 18px; border-bottom: 1px solid var(--line);
+}
+.field:last-child { border-bottom: none; }
+.field > label { width: 96px; flex-shrink: 0; font-size: 13px; color: var(--text-2); }
+.field > .ctl { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.field.stack { flex-direction: column; align-items: stretch; gap: 9px; }
+.field.stack > label { width: auto; }
+.field.stack > .ctl { width: 100%; }
 
-.tab-panel { display: none; }
-.tab-panel.active { display: block; }
+.list { padding: 16px 18px; }
+.empty { font-size: 13px; color: var(--text-3); }
+.hint { font-size: 12px; color: var(--text-3); }
+.mono { font-family: var(--mono); }
 
-.section-title {
-  font-size: 14px; font-weight: 600; color: #111827;
-  margin-bottom: 10px; padding-bottom: 6px;
-  border-bottom: 1px solid #f0f0f0;
+/* ── 子条目 ── */
+.item {
+  border: 1px solid var(--line-2); border-radius: 12px;
+  background: var(--surface-2); margin-bottom: 12px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .03);
+}
+.item:last-child { margin-bottom: 0; }
+.item-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 11px 16px; border-bottom: 1px solid var(--line-2);
+  background: var(--surface-3); border-radius: 11px 11px 0 0;
+}
+.item-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.item-actions { display: flex; align-items: center; gap: 10px; }
+.item .field { padding: 10px 16px; }
+.item .field > label { width: 88px; }
+
+/* ── 表单控件 ── */
+/* 注意：必须覆盖 input:not([type])，未写 type 的 input 匹配不到 [type="text"]，
+   会退回 UA 默认的 border-style: inset，表现为上/左发暗的 3D 内嵌边框 */
+input[type="text"], input[type="number"], input:not([type]) {
+  height: 36px; padding: 0 11px;
+  border: 1px solid var(--line-2); border-style: solid; border-radius: 8px;
+  font-size: 13px; font-family: var(--mono);
+  background: var(--surface); color: var(--text);
+  /* 清除 WebView/系统原生 input 的默认内阴影（表现为上、左偏暗） */
+  appearance: none; -webkit-appearance: none;
+  box-shadow: none; outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+input[type="text"] { width: 180px; }
+input[type="number"] { width: 88px; }
+input[type="text"]::placeholder, input[type="number"]::placeholder, input:not([type])::placeholder { color: var(--text-4); font-family: var(--sans); }
+input[type="text"]:hover, input[type="number"]:hover, input:not([type]):hover { border-color: var(--line-3); }
+input:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
-/* ── 表单 ── */
-.form-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.form-row label { width: 70px; font-size: 13px; color: #6b7280; flex-shrink: 0; text-align: right; }
-.form-row .hint { font-size: 12px; color: #9ca3af; }
-
-input[type="text"], input[type="number"], select {
-  padding: 5px 8px; border: 1px solid #e5e7eb; border-radius: 6px;
-  font-size: 13px; background: #fff; color: #333; outline: none;
-  font-family: inherit; transition: border-color 0.15s;
+select {
+  height: 36px; width: 150px; padding: 0 28px 0 11px;
+  border: 1px solid var(--line-2); border-style: solid; border-radius: 8px;
+  font-size: 13px; font-family: var(--sans);
+  background-color: var(--surface); color: var(--text); cursor: pointer;
+  appearance: none; -webkit-appearance: none;
+  box-shadow: none; outline: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%),
+                    linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  transition: border-color .15s, box-shadow .15s;
 }
-input:focus, select:focus { border-color: #6366f1; }
-input[type="text"] { width: 160px; }
-input[type="number"] { width: 70px; }
-select { width: 140px; }
+select:hover { border-color: var(--line-3); }
+
+input[type="checkbox"] {
+  width: 15px; height: 15px; margin: 0; flex-shrink: 0;
+  accent-color: var(--accent); cursor: pointer;
+  appearance: none; -webkit-appearance: none;
+  border: 1px solid var(--line-3); border-radius: 4px; background: var(--surface);
+  position: relative; transition: background .15s, border-color .15s;
+}
+input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+input[type="checkbox"]:checked::after {
+  content: ''; position: absolute; left: 4px; top: 1px;
+  width: 4px; height: 8px;
+  border: solid #fff; border-width: 0 1.8px 1.8px 0;
+  transform: rotate(45deg);
+}
+
+/* ── 地址行 ── */
+.addr-row { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.addr-fixed { font-size: 13px; color: var(--text-3); font-family: var(--mono); flex-shrink: 0; }
+.addr-row select { width: 76px; flex: 0 0 76px; }
+.addr-row input.srv-host { width: 150px; }
+.addr-row input.srv-port { width: 88px; }
+.addr-row input.srv-path { width: 160px; }
+
+.checks { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.checks label { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-2); cursor: pointer; }
 
 /* ── 开关 ── */
 .toggle {
-  width: 36px; height: 20px; border-radius: 10px;
-  background: #d1d5db; cursor: pointer; transition: background 0.2s;
+  width: 38px; height: 22px; border-radius: 11px;
+  background: var(--surface-3); border: 1px solid var(--line-3);
+  cursor: pointer;
+  transition: background .2s, border-color .2s, box-shadow .2s;
   flex-shrink: 0; display: inline-block; position: relative; vertical-align: middle;
+  -webkit-tap-highlight-color: transparent;
 }
 .toggle::after {
-  content: ''; width: 16px; height: 16px; border-radius: 50%;
-  background: #fff; position: absolute; top: 2px; left: 2px;
-  transition: left 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  content: ''; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; position: absolute; top: 1px; left: 1px;
+  transition: left .2s;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .22);
 }
-.toggle.on { background: #6366f1; }
-.toggle.on::after { left: 18px; }
-.toggle-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.toggle.on {
+  background: linear-gradient(180deg, var(--accent-3), var(--accent));
+  border-color: var(--accent-2);
+  box-shadow: 0 2px 6px -1px rgba(37, 99, 235, .4);
+}
+.toggle.on::after { left: 17px; }
 
 /* ── 按钮 ── */
 .btn {
-  padding: 5px 12px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 13px;
-  font-weight: 500; cursor: pointer; transition: all 0.15s; font-family: inherit;
-  display: inline-block; background: #fff; color: #6b7280; line-height: 1.4;
+  height: 34px; padding: 0 14px;
+  border: 1px solid var(--line-2); border-radius: 8px;
+  background: var(--surface); color: var(--text-2);
+  font-size: 13px; font-family: inherit; font-weight: 500;
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  line-height: 1; white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  transition: background .15s, border-color .15s, color .15s, box-shadow .15s;
+  -webkit-tap-highlight-color: transparent;
 }
-.btn:hover { background: #f5f6f8; }
-.btn-primary { background: #6366f1; color: #fff; border-color: #6366f1; }
-.btn-primary:hover { background: #5457e5; }
-.btn-danger { color: #e74c3c; border-color: #f0c8c4; }
-.btn-danger:hover { background: #fdf2f2; }
-.btn-xs { padding: 2px 6px; font-size: 12px; }
-
-/* ── 子卡片 ── */
-.sub-card {
-  background: #f9fafb; border: 1px solid #f0f0f0; border-radius: 8px;
-  padding: 12px 14px; margin-bottom: 8px;
+.btn:hover { background: var(--surface-2); border-color: var(--line-3); color: var(--text); }
+.btn:active { transform: translateY(1px); box-shadow: none; }
+.btn-primary {
+  background: linear-gradient(180deg, var(--accent-3), var(--accent));
+  border-color: var(--accent-2); color: #fff;
+  box-shadow: 0 2px 8px -2px rgba(37, 99, 235, .55);
 }
-.sub-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.sub-card-title { font-size: 13px; font-weight: 600; color: #374151; }
+.btn-primary:hover {
+  background: linear-gradient(180deg, #4b8ef7, var(--accent-2));
+  border-color: var(--accent-2); color: #fff;
+}
+.btn-danger { color: var(--danger); border-color: var(--line-2); background: var(--surface); }
+.btn-danger:hover { background: var(--danger-soft); border-color: #f5c2c0; color: var(--danger); }
+.btn-xs { height: 27px; padding: 0 10px; font-size: 12px; border-radius: 7px; }
 
 /* ── 标签 ── */
-.tag-list { display: flex; flex-wrap: wrap; gap: 3px; flex: 1; }
+.tag-list { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
 .tag {
-  display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px;
-  background: #eef0ff; color: #4f46e5; border: 1px solid #d5d8f5;
+  display: inline-flex; align-items: center; gap: 5px; height: 27px; padding: 0 9px;
+  border-radius: 7px; font-size: 12px; font-family: var(--mono);
+  background: var(--accent-soft); color: var(--accent-2);
+  border: 1px solid var(--accent-line);
 }
-.tag .rm { cursor: pointer; opacity: 0.5; margin-left: 2px; }
-.tag .rm:hover { opacity: 1; }
-.tag-avatar { width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 2px; }
-.tag-input-wrap { display: inline-flex; align-items: center; gap: 3px; }
-.tag-input-wrap input {
-  padding: 2px 5px; border: 1px solid #d5d7db; border-radius: 3px;
-  font-size: 11px; background: #fff; outline: none; width: 100px;
-}
-.tag-input-wrap input:focus { border-color: #6366f1; }
+.tag .rm { cursor: pointer; color: var(--accent-2); opacity: .5; font-size: 14px; line-height: 1; }
+.tag .rm:hover { opacity: 1; color: var(--danger); }
+.tag-avatar { width: 15px; height: 15px; border-radius: 4px; object-fit: cover; }
+.tag-input-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.tag-input-wrap input { height: 27px; width: 110px; padding: 0 8px; font-size: 12px; border-radius: 7px; }
 
 /* ── 群聊选择器 ── */
 .group-select-wrap { position: relative; flex: 1; min-width: 0; }
 .group-select-trigger {
-  display: flex; align-items: center; gap: 4px; min-height: 28px;
-  padding: 2px 8px; border: 1px solid #e5e7eb; border-radius: 6px;
-  background: #fff; cursor: pointer; transition: border-color 0.15s;
+  display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px;
+  border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface);
+  cursor: pointer; transition: border-color .15s, box-shadow .15s;
+  -webkit-tap-highlight-color: transparent;
 }
-.group-select-trigger:hover { border-color: #6366f1; }
-.group-select-trigger .count {
-  flex: 1; font-size: 12px; color: #6b7280; text-align: left;
-}
-.group-select-trigger .arrow {
-  font-size: 10px; color: #9ca3af; flex-shrink: 0;
-}
-.group-select-tags {
-  display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;
-}
+.group-select-trigger:hover { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-ring); }
+.group-select-trigger .count { flex: 1; font-size: 13px; color: var(--text-2); text-align: left; }
+.group-select-trigger .arrow { font-size: 9px; color: var(--text-3); flex-shrink: 0; }
+.group-select-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .group-select-dropdown {
-  position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
-  max-height: 220px; overflow-y: auto; margin-top: 2px;
-  background: #fff; border: 1px solid #e5e7eb; border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: none;
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 100;
+  max-height: 240px; overflow-y: auto; padding: 5px;
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  display: none; overscroll-behavior: contain;
 }
 .group-select-option {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 10px; font-size: 12px; color: #374151; cursor: pointer;
-  transition: background 0.1s; width: 100%;
+  display: flex; align-items: center; gap: 9px; padding: 8px 9px;
+  font-size: 13px; color: var(--text-2); cursor: pointer; border-radius: 7px;
+  transition: background .12s; -webkit-tap-highlight-color: transparent;
 }
-.group-select-option:hover { background: #f5f6f8; }
-.group-select-option input[type="checkbox"] { margin: 0; flex-shrink: 0; }
+.group-select-option:hover { background: var(--surface-2); }
+.group-select-option.selected { background: var(--accent-soft); }
+.group-select-option input[type="checkbox"] { pointer-events: none; }
 .group-select-option .opt-avatar {
-  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
-  background: #e5e7eb; object-fit: cover;
+  width: 22px; height: 22px; border-radius: 6px; object-fit: cover;
+  background: var(--surface-3); flex-shrink: 0;
 }
 .group-select-option .opt-info { flex: 1; min-width: 0; }
-.group-select-option .opt-name { font-size: 12px; color: #374151; white-space: nowrap; }
-.group-select-option .opt-id { font-size: 10px; color: #9ca3af; }
-.group-select-option.selected { background: #eef0ff; }
-.group-select-dropdown .no-groups {
-  padding: 10px; text-align: center; font-size: 12px; color: #9ca3af;
-}
+.group-select-option .opt-name { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group-select-option.selected .opt-name { color: var(--accent-2); }
+.group-select-option .opt-id { font-size: 11px; color: var(--text-3); font-family: var(--mono); margin-left: 4px; }
+.no-groups { padding: 14px; text-align: center; font-size: 13px; color: var(--text-3); }
 
 /* ── Toast ── */
 .toast {
-  position: fixed; top: 12px; right: 12px; z-index: 999;
-  padding: 6px 14px; border-radius: 4px; font-size: 12px; background: #fff;
-  border: 1px solid #e0e1e4; animation: slideIn 0.3s ease; display: none;
+  position: fixed; top: 72px; left: 50%; z-index: 999;
+  transform: translateX(-50%) translateY(-8px);
+  padding: 10px 18px; border-radius: 10px;
+  font-size: 13px; background: var(--ink); color: #fff;
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, .35);
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s, transform .2s;
 }
-.toast.show { display: block; }
-.toast.success { border-left: 3px solid #22c55e; color: #16a34a; }
-.toast.error { border-left: 3px solid #ef4444; color: #dc2626; }
-@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.success { background: #0f7a56; }
+.toast.error { background: #b4232a; }
 
-.status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 3px; }
-.status-dot.on { background: #22c55e; }
-.status-dot.off { background: #bbb; }
-.status-text { font-size: 11px; color: #888; }
-
-.addr-fixed { font-size: 13px; color: #6b7280; font-family: monospace; flex-shrink: 0; }
-.addr-row { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; }
-.addr-row select { width: 64px; }
-.addr-row .srv-host { width: 140px; }
-.addr-row .srv-port { width: 74px; }
-.addr-row .srv-path { width: 150px; flex: 0 0 150px; }
-.server-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; }
-.server-address-row { grid-column: 1 / -1; }
-
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
-
-/* ── 浮动保存按钮 ── */
+/* ── 浮动保存 ── */
 .save-float {
-  position: fixed; top: 16px; right: 16px; z-index: 998;
-  display: none; align-items: center; gap: 8px;
-  padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
-  background: #6366f1; color: #fff; cursor: pointer; border: none; font-family: inherit;
-  box-shadow: 0 4px 12px rgba(99,102,241,0.3);
-  transition: all 0.2s; animation: floatIn 0.25s ease;
+  position: fixed; left: 50%; bottom: 24px; z-index: 998;
+  transform: translateX(-50%) translateY(12px);
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 42px; padding: 0 22px; border: none; border-radius: 21px;
+  background: linear-gradient(180deg, var(--accent-3), var(--accent));
+  color: #fff;
+  font-size: 13.5px; font-weight: 600; font-family: inherit;
+  cursor: pointer; opacity: 0; pointer-events: none;
+  box-shadow: 0 12px 28px -10px rgba(37, 99, 235, .58), 0 2px 8px rgba(37, 99, 235, .18);
+  transition: opacity .2s, transform .2s, background .15s;
+  -webkit-tap-highlight-color: transparent;
 }
-.save-float.show { display: inline-flex; }
-.save-float:hover { background: #5457e5; box-shadow: 0 6px 16px rgba(99,102,241,0.4); }
-@keyframes floatIn { from { transform: translateY(-12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.save-float.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+.save-float:hover { background: linear-gradient(180deg, #4b8ef7, var(--accent-2)); }
+
+/* ── 滚动条 ── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d3d9e4; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--line-3); }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── 竖屏手机 ── */
+@media (max-width: 720px) {
+  .topbar-inner { height: auto; flex-wrap: wrap; padding: 10px 16px; gap: 10px; }
+  .brand { order: 1; }
+  .conn { order: 2; margin-left: auto; }
+  .tabs { order: 3; width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+
+  .page { padding: 20px 16px 0; }
+  .page-head { margin-bottom: 18px; }
+  .page-head h1 { font-size: 20px; }
+
+  .field { gap: 10px; padding: 12px 14px; }
+  .field > label { width: 84px; }
+  .field > .ctl { gap: 8px; }
+  .list { padding: 14px; }
+  .item .field { padding: 10px 14px; }
+  .item .field > label { width: 76px; }
+  .group-head { padding: 13px 14px; }
+  .group-note { padding: 12px 14px; }
+
+  input[type="text"]:not(.tag-add-input):not(.manual-group-input) { width: 100%; flex: 1 1 140px; }
+  input[type="number"] { width: 96px; }
+  select { width: auto; flex: 1 1 110px; }
+
+  .addr-row { flex-wrap: wrap; row-gap: 8px; }
+  .addr-row select { flex: 0 0 78px; width: 78px; }
+  .addr-row input.srv-host { width: auto; flex: 1 1 120px; min-width: 0; }
+  .addr-row input.srv-port { width: auto; flex: 0 1 90px; min-width: 0; }
+  .addr-row input.srv-path { width: auto; flex: 1 1 100%; min-width: 0; }
+
+  .group-select-wrap { width: 100%; }
+  .group-select-trigger { min-height: 38px; }
+  .group-select-option { padding: 11px 10px; }
+
+  .toggle { width: 44px; height: 26px; border-radius: 13px; }
+  .toggle::after { width: 22px; height: 22px; }
+  .toggle.on::after { left: 19px; }
+
+  .btn { height: 38px; }
+  .btn-xs { height: 30px; }
+
+  .save-float { left: 16px; right: 16px; transform: translateY(12px); justify-content: center; }
+  .save-float.show { transform: translateY(0); }
+  .toast { top: auto; bottom: 82px; left: 16px; right: 16px; transform: translateY(8px); text-align: center; }
+  .toast.show { transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}
 </style>
 </head>
 <body>
-<div class="layout">
-  <nav class="nav-side">
-    <div class="nav-header">📡 Gs适配器</div>
-    <div class="nav-items">
-      <a class="nav-tab active" data-tab="tab-core" onclick="switchTab('tab-core')">
-        <span class="ico">🔌</span>核心连接
-      </a>
-      <a class="nav-tab" data-tab="tab-msg" onclick="switchTab('tab-msg')">
-        <span class="ico">📋</span>消息规则
-      </a>
-      <a class="nav-tab" data-tab="tab-prefix" onclick="switchTab('tab-prefix')">
-        <span class="ico">🏷️</span>前缀设置
-      </a>
-      <a class="nav-tab" data-tab="tab-legacy" onclick="switchTab('tab-legacy')">
-        <span class="ico">🧩</span>消息构造
-      </a>
-      <a class="nav-tab" data-tab="tab-ext" onclick="switchTab('tab-ext')">
-        <span class="ico">⚙️</span>高级设置
-      </a>
-    </div>
-    <div class="nav-footer">
-      <span class="status-dot off" id="statusDot"></span><span id="statusLabel">加载中</span>
-    </div>
-  </nav>
 
-  <div class="content">
-    <div class="content-header">
-      <div>
-        <h1 id="pageTitle">核心连接</h1>
-        <div class="sub">GS连接适配器 — Bot与GS核心服务之间的消息转发管理</div>
-      </div>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-mark">G</span>
+      <span class="brand-name">Gs适配器</span>
     </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="tab-core" onclick="switchTab('tab-core')">核心连接</button>
+      <button class="tab" data-tab="tab-msg" onclick="switchTab('tab-msg')">消息规则</button>
+      <button class="tab" data-tab="tab-prefix" onclick="switchTab('tab-prefix')">前缀设置</button>
+      <button class="tab" data-tab="tab-legacy" onclick="switchTab('tab-legacy')">消息构造</button>
+      <button class="tab" data-tab="tab-ext" onclick="switchTab('tab-ext')">高级设置</button>
+    </nav>
+    <div class="conn">
+      <span class="status-dot off" id="statusDot"></span>
+      <span id="statusLabel">加载中</span>
+    </div>
+  </div>
+</header>
 
-    <div class="tab-panel active" id="tab-core">
-      <div class="card">
-        <div class="section-title">🔌 插件开关</div>
-        <div class="form-row">
+<main class="page">
+  <div class="page-head">
+    <h1 id="pageTitle">核心连接</h1>
+    <p class="page-sub">GS 连接适配器 — Bot 与 GS 核心服务之间的消息转发管理</p>
+  </div>
+
+  <section class="panel active" id="tab-core">
+    <div class="group">
+      <div class="group-head"><h2>插件开关</h2></div>
+      <div class="rows">
+        <div class="field">
           <label>总开关</label>
-          <div class="toggle-wrap">
+          <div class="ctl">
             <div class="toggle" id="pluginEnabled" onclick="toggle(this)"></div>
             <span class="hint">关闭后停止所有连接和转发</span>
           </div>
         </div>
       </div>
-
-      <div class="card">
-        <div class="section-title">🔗 GS连接设置</div>
-        <div id="serverList"></div>
-        <button class="btn" onclick="addServer()" style="margin-top:4px;">+ 添加连接</button>
-      </div>
-
     </div>
 
-    <div class="tab-panel" id="tab-msg">
-      <div class="card">
-        <div class="section-title">🚫 群聊消息拦截</div>
-        <div id="interceptList"></div>
-        <button class="btn" onclick="addIntercept()" style="margin-top:4px;">+ 添加</button>
+    <div class="group">
+      <div class="group-head">
+        <h2>GS 连接设置</h2>
+        <button class="btn" onclick="addServer()">添加连接</button>
       </div>
+      <div class="list" id="serverList"></div>
+    </div>
+  </section>
 
-      <div class="card">
-        <div class="section-title">🔔 通知设置</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;">
-          <div class="form-row"><label>不转发前缀</label><div id="noMsgStartTags"></div></div>
-          <div class="form-row"><label>不转发包含</label><div id="noMsgIncludeTags"></div></div>
-          <div class="form-row"><label>黑名单群聊</label><div class="group-select-wrap" id="noGroupSelectWrap"></div></div>
-          <div class="form-row"><label>白名单群聊</label><div class="group-select-wrap" id="yesGroupSelectWrap"></div></div>
+  <section class="panel" id="tab-msg">
+    <div class="group">
+      <div class="group-head">
+        <h2>群聊消息拦截</h2>
+        <button class="btn" onclick="addIntercept()">添加规则</button>
+      </div>
+      <div class="list" id="interceptList"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-head"><h2>过滤规则</h2></div>
+      <div class="rows">
+        <div class="field stack">
+          <label>不转发前缀</label>
+          <div class="ctl" id="noMsgStartTags"></div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-top:4px;">
-          <div class="form-row"><label>断开通知</label><div class="toggle-wrap"><div class="toggle" id="disconnectToMaster" onclick="toggle(this)"></div></div></div>
-          <div class="form-row"><label>重连通知</label><div class="toggle-wrap"><div class="toggle" id="reconnectToMaster" onclick="toggle(this)"></div></div></div>
-          <div class="form-row"><label>首次连接</label><div class="toggle-wrap"><div class="toggle" id="firstconnectToMaster" onclick="toggle(this)"></div></div></div>
+        <div class="field stack">
+          <label>不转发包含</label>
+          <div class="ctl" id="noMsgIncludeTags"></div>
+        </div>
+        <div class="field stack">
+          <label>黑名单群聊</label>
+          <div class="ctl"><div class="group-select-wrap" id="noGroupSelectWrap"></div></div>
+        </div>
+        <div class="field stack">
+          <label>白名单群聊</label>
+          <div class="ctl"><div class="group-select-wrap" id="yesGroupSelectWrap"></div></div>
         </div>
       </div>
     </div>
 
-    <div class="tab-panel" id="tab-prefix">
-      <div class="card">
-        <div class="section-title">🏷️ GS前缀设置</div>
-        <p style="font-size:12px;color:#9ca3af;margin-bottom:10px;">按 BOT 账号在转发消息时自动添加命令前缀，使同一 GS 核心服务可区分不同 BOT 的指令。开启后自动移除消息中的 / 前缀。</p>
-        <div id="prefixList"></div>
-        <button class="btn" onclick="addPrefix()" style="margin-top:4px;">+ 添加</button>
-      </div>
-      <div class="card">
-        <div class="section-title">🏷️ 前缀忽略</div>
-        <p style="font-size:12px;color:#9ca3af;margin-bottom:10px;">上报 GS 前，忽略/剥离消息开头的这些前缀。例如配置 <code>/</code> 后，收到 <code>/ww帮助</code> 会上报为 <code>ww帮助</code>。</p>
-        <div class="form-row"><label>忽略前缀</label><div id="gsuidPrefixIgnoreTags"></div></div>
+    <div class="group">
+      <div class="group-head"><h2>连接通知</h2></div>
+      <div class="rows">
+        <div class="field"><label>断开通知</label><div class="ctl"><div class="toggle" id="disconnectToMaster" onclick="toggle(this)"></div></div></div>
+        <div class="field"><label>重连通知</label><div class="ctl"><div class="toggle" id="reconnectToMaster" onclick="toggle(this)"></div></div></div>
+        <div class="field"><label>首次连接</label><div class="ctl"><div class="toggle" id="firstconnectToMaster" onclick="toggle(this)"></div></div></div>
       </div>
     </div>
+  </section>
 
-    <div class="tab-panel" id="tab-legacy">
-      <div class="card">
-        <div class="section-title">📱 Legacy 回复</div>
-        <p style="font-size:12px;color:#9ca3af;margin-bottom:10px;">仅对 GSUID Core 回包使用旧版发送方式，不改变 QQBot 的全局 raw 设置。</p>
-        <div class="form-row">
+  <section class="panel" id="tab-prefix">
+    <div class="group">
+      <div class="group-head">
+        <h2>GS 前缀设置</h2>
+        <button class="btn" onclick="addPrefix()">添加规则</button>
+      </div>
+      <div class="group-note">按 BOT 账号在转发消息时自动添加命令前缀，使同一 GS 核心服务可区分不同 BOT 的指令。开启后自动移除消息中的 <code>/</code> 前缀。</div>
+      <div class="list" id="prefixList"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-head"><h2>前缀忽略</h2></div>
+      <div class="group-note">上报 GS 前，忽略/剥离消息开头的这些前缀。例如配置 <code>/</code> 后，收到 <code>/ww帮助</code> 会上报为 <code>ww帮助</code>。</div>
+      <div class="rows">
+        <div class="field stack">
+          <label>忽略前缀</label>
+          <div class="ctl" id="gsuidPrefixIgnoreTags"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-legacy">
+    <div class="group">
+      <div class="group-head"><h2>Legacy 回复</h2></div>
+      <div class="group-note">仅对 GSUID Core 回包使用旧版发送方式，不改变 QQBot 的全局 raw 设置。</div>
+      <div class="rows">
+        <div class="field">
           <label>启用</label>
-          <div class="toggle-wrap">
+          <div class="ctl">
             <div class="toggle" id="legacyReplyEnabled" onclick="toggle(this)"></div>
             <span class="hint">留空群聊或机器人时表示不限制该维度</span>
           </div>
         </div>
-        <div class="form-row"><label>生效群聊</label><div class="group-select-wrap" id="legacyGroupSelectWrap"></div></div>
-        <div class="form-row"><label>生效机器人</label><div id="legacyBotList"></div></div>
-      </div>
-
-      <div class="card">
-        <div class="section-title">📤 强制主动消息</div>
-        <p style="font-size:12px;color:#9ca3af;margin-bottom:10px;">启用后不做权限探测，对所有 QQBot 群聊生效。匹配模式开启时，仅末尾为“攻略”的指令所在会话会在 60 秒内使用主动发送。</p>
-        <div class="form-row">
-          <label>启用</label>
-          <div class="toggle-wrap">
-            <div class="toggle" id="forceActiveEnabled" onclick="toggle(this)"></div>
-          </div>
+        <div class="field stack">
+          <label>生效群聊</label>
+          <div class="ctl"><div class="group-select-wrap" id="legacyGroupSelectWrap"></div></div>
         </div>
-        <div class="form-row">
+        <div class="field stack">
+          <label>生效机器人</label>
+          <div class="ctl" id="legacyBotList"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head"><h2>强制主动消息</h2></div>
+      <div class="group-note">启用后不做权限探测，对所有 QQBot 群聊生效。匹配模式开启时，仅末尾为“攻略”的指令所在会话会在 60 秒内使用主动发送。</div>
+      <div class="rows">
+        <div class="field"><label>启用</label><div class="ctl"><div class="toggle" id="forceActiveEnabled" onclick="toggle(this)"></div></div></div>
+        <div class="field">
           <label>匹配模式</label>
-          <div class="toggle-wrap">
+          <div class="ctl">
             <div class="toggle" id="forceActiveMatchingMode" onclick="toggle(this)"></div>
-            <span class="hint">关闭=全部回包主动发送</span>
+            <span class="hint">关闭 = 全部回包主动发送</span>
           </div>
         </div>
       </div>
     </div>
+  </section>
 
-    <div class="tab-panel" id="tab-ext">
-      <div class="card">
-        <div class="section-title">⚙️ 其他设置</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;">
-          <div class="form-row"><label>禁言拦截</label><div class="toggle-wrap"><div class="toggle" id="muteStop" onclick="toggle(this)"></div></div></div>
-          <div class="form-row"><label>关机联动</label><div class="toggle-wrap"><div class="toggle" id="shutdownStop" onclick="toggle(this)"></div><span class="hint">Yunzai #关机 后停止上报</span></div></div>
-          <div class="form-row"><label>合并转发</label><div class="toggle-wrap"><div class="toggle" id="mergeForward" onclick="toggle(this)"></div><span class="hint">收到合并转发时展开上报</span></div></div>
-          <div class="form-row"><label>合并转发平铺</label><div class="toggle-wrap"><div class="toggle" id="mergeForwardFlatten" onclick="toggle(this)"></div><span class="hint">展开为普通消息上报</span></div></div>
-          <div class="form-row"><label>仅合并转发文字</label><div class="toggle-wrap"><div class="toggle" id="mergeForwardTextOnly" onclick="toggle(this)"></div><span class="hint">合并转发只上报文字</span></div></div>
-          <div class="form-row"><label>忽略仅艾特</label><div class="toggle-wrap"><div class="toggle" id="ignoreOnlyReplyAt" onclick="toggle(this)"></div></div></div>
-          <div class="form-row"><label>临时会话</label><div class="toggle-wrap"><div class="toggle" id="tempMsgReport" onclick="toggle(this)"></div></div></div>
-          <div class="form-row"><label>消息存储</label><input type="number" id="msgStoreTime" min="0" onchange="computeDirty()"><span class="hint">秒</span></div>
-          <div class="form-row"><label>同步锁</label><input type="number" id="taskQueue" min="0" onchange="computeDirty()"><span class="hint">0=关</span></div>
-          <div class="form-row"><label>心跳频率</label><input type="number" id="heartbeatInterval" min="0" onchange="computeDirty()"><span class="hint">秒</span></div>
+  <section class="panel" id="tab-ext">
+    <div class="group">
+      <div class="group-head"><h2>消息处理</h2></div>
+      <div class="rows">
+        <div class="field"><label>禁言拦截</label><div class="ctl"><div class="toggle" id="muteStop" onclick="toggle(this)"></div></div></div>
+        <div class="field">
+          <label>关机联动</label>
+          <div class="ctl"><div class="toggle" id="shutdownStop" onclick="toggle(this)"></div><span class="hint">Yunzai #关机 后停止上报</span></div>
+        </div>
+        <div class="field"><label>忽略仅艾特</label><div class="ctl"><div class="toggle" id="ignoreOnlyReplyAt" onclick="toggle(this)"></div></div></div>
+        <div class="field"><label>临时会话</label><div class="ctl"><div class="toggle" id="tempMsgReport" onclick="toggle(this)"></div></div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head"><h2>合并转发</h2></div>
+      <div class="rows">
+        <div class="field">
+          <label>合并转发</label>
+          <div class="ctl"><div class="toggle" id="mergeForward" onclick="toggle(this)"></div><span class="hint">收到合并转发时展开上报</span></div>
+        </div>
+        <div class="field">
+          <label>平铺上报</label>
+          <div class="ctl"><div class="toggle" id="mergeForwardFlatten" onclick="toggle(this)"></div><span class="hint">展开为普通消息上报</span></div>
+        </div>
+        <div class="field">
+          <label>仅上报文字</label>
+          <div class="ctl"><div class="toggle" id="mergeForwardTextOnly" onclick="toggle(this)"></div><span class="hint">合并转发只上报文字内容</span></div>
         </div>
       </div>
     </div>
-  </div>
-</div>
+
+    <div class="group">
+      <div class="group-head"><h2>性能</h2></div>
+      <div class="rows">
+        <div class="field">
+          <label>消息存储</label>
+          <div class="ctl"><input type="number" id="msgStoreTime" min="0" onchange="computeDirty()"><span class="hint">秒</span></div>
+        </div>
+        <div class="field">
+          <label>同步锁</label>
+          <div class="ctl"><input type="number" id="taskQueue" min="0" onchange="computeDirty()"><span class="hint">0 = 关闭</span></div>
+        </div>
+        <div class="field">
+          <label>心跳频率</label>
+          <div class="ctl"><input type="number" id="heartbeatInterval" min="0" onchange="computeDirty()"><span class="hint">秒</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
 
 <div class="toast" id="toast"></div>
-<button class="save-float" id="saveFloat" onclick="saveConfig()">💾 保存配置</button>
+<button class="save-float" id="saveFloat" onclick="saveConfig()">保存配置</button>
 
 <script>
 const WEB_BASE = new URLSearchParams(location.search).get('__webBase') || ''
@@ -438,8 +723,8 @@ function ensureMessageBuild() {
 }
 
 function switchTab(tabId) {
-  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'))
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'))
   document.querySelector(`[data-tab="${tabId}"]`).classList.add('active')
   document.getElementById(tabId).classList.add('active')
   const titles = { 'tab-core': '核心连接', 'tab-msg': '消息规则', 'tab-prefix': '前缀设置', 'tab-legacy': '消息构造', 'tab-ext': '高级设置' }
@@ -529,6 +814,7 @@ function updateStatus(on) {
   else { dot.className = 'status-dot off'; label.textContent = '已关闭' }
 }
 
+// ── 连接列表 ──
 function getServerEnabledBots(server) {
   if (Array.isArray(server.enabledBots)) return server.enabledBots.map(String)
   if (Array.isArray(configData.enabledBots) && configData.enabledBots.length > 0) return configData.enabledBots.map(String)
@@ -538,12 +824,12 @@ function isServerAllBots(server) {
   return getServerEnabledBots(server).includes('all')
 }
 function renderServerBotSelect(index, server) {
-  if (botList.length === 0) return '<span class="hint">暂无已连接BOT</span>'
+  if (botList.length === 0) return '<span class="hint">暂无已连接 BOT</span>'
   const selected = getServerEnabledBots(server)
-  return botList.map(b => {
+  return '<div class="checks">' + botList.map(b => {
     const c = selected.includes(String(b.value)) ? 'checked' : ''
-    return `<label style="margin-right:8px;font-size:12px;cursor:pointer;"><input type="checkbox" value="${escHtml(b.value)}" ${c} class="server-bot-check-${index}" onchange="toggleServerBot(${index},this)"> ${escHtml(b.label)}</label>`
-  }).join('')
+    return `<label><input type="checkbox" value="${escHtml(b.value)}" ${c} class="server-bot-check-${index}" onchange="toggleServerBot(${index},this)"> ${escHtml(b.label)}</label>`
+  }).join('') + '</div>'
 }
 function toggleServerBotsAll(index, el) {
   if (!configData.servers?.[index]) return
@@ -551,11 +837,10 @@ function toggleServerBotsAll(index, el) {
   configData.servers[index].enabledBots = el.classList.contains('on') ? ['all'] : []
   renderServers(); computeDirty()
 }
-function toggleServerBot(index, checkbox) {
+function toggleServerBot(index) {
   const server = configData.servers?.[index]
   if (!server) return
-  const selected = [...document.querySelectorAll(`.server-bot-check-${index}:checked`)].map(cb => cb.value)
-  server.enabledBots = selected
+  server.enabledBots = [...document.querySelectorAll(`.server-bot-check-${index}:checked`)].map(cb => cb.value)
   computeDirty()
 }
 
@@ -566,28 +851,46 @@ function renderServers() {
   list.innerHTML = configData.servers.map((srv, i) => {
     const addr = parseAddress(srv.address || '')
     return `
-      <div class="sub-card">
-        <div class="sub-card-header">
-          <span class="sub-card-title">连接 #${i + 1}</span>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span class="hint">启用</span><div class="toggle ${srv.enabled !== false ? 'on' : ''}" onclick="toggleServerEnabled(${i},this)"></div>
-            <button class="btn btn-danger btn-xs" onclick="removeServer(${i})">删</button>
+      <div class="item">
+        <div class="item-head">
+          <div class="item-title">连接 #${i + 1}</div>
+          <div class="item-actions">
+            <span class="hint">启用</span>
+            <div class="toggle ${srv.enabled !== false ? 'on' : ''}" onclick="toggleServerEnabled(${i},this)"></div>
+            <button class="btn btn-danger btn-xs" onclick="removeServer(${i})">删除</button>
           </div>
         </div>
-        <div class="server-grid">
-          <div class="form-row"><label>名称</label><input type="text" value="${escHtml(srv.name || '')}" onchange="updateServer(${i},'name',this.value)"></div>
-          <div class="form-row server-address-row"><label>地址</label><div class="addr-row">
+        <div class="field">
+          <label>名称</label>
+          <div class="ctl"><input type="text" value="${escHtml(srv.name || '')}" onchange="updateServer(${i},'name',this.value)"></div>
+        </div>
+        <div class="field">
+          <label>地址</label>
+          <div class="ctl addr-row">
             <select onchange="updateServerAddr(${i},'protocol',this.value)"><option value="ws" ${addr.protocol === 'ws' ? 'selected' : ''}>ws</option><option value="wss" ${addr.protocol === 'wss' ? 'selected' : ''}>wss</option></select>
-            <span class="addr-fixed">://</span><input class="srv-host" type="text" value="${escHtml(addr.host)}" placeholder="127.0.0.1" onchange="updateServerAddr(${i},'host',this.value)">
-            <span class="addr-fixed">:</span><input class="srv-port" type="number" value="${escHtml(addr.port)}" min="1" max="65535" onchange="updateServerAddr(${i},'port',this.value)">
+            <span class="addr-fixed">://</span>
+            <input class="srv-host" type="text" value="${escHtml(addr.host)}" placeholder="127.0.0.1" onchange="updateServerAddr(${i},'host',this.value)">
+            <span class="addr-fixed">:</span>
+            <input class="srv-port" type="number" value="${escHtml(addr.port)}" min="1" max="65535" onchange="updateServerAddr(${i},'port',this.value)">
             <input class="srv-path" type="text" value="${escHtml(addr.path)}" placeholder="/ws/yunzai" onchange="updateServerAddr(${i},'path',this.value)">
-            <span class="hint">路径，例: /ws/yunzai</span>
-          </div></div>
-          <div class="form-row"><label>重连间隔</label><input type="number" min="0" value="${Number(srv.reconnectInterval ?? 5)}" onchange="updateServer(${i},'reconnectInterval',Number(this.value)||5)"><span class="hint">秒</span></div>
-          <div class="form-row"><label>最大重连</label><input type="number" min="0" value="${Number(srv.maxReconnectAttempts ?? 0)}" onchange="updateServer(${i},'maxReconnectAttempts',Number(this.value)||0)"></div>
-          <div class="form-row"><label>全部BOT</label><div class="toggle-wrap"><div class="toggle ${isServerAllBots(srv) ? 'on' : ''}" onclick="toggleServerBotsAll(${i},this)"></div><span class="hint">此连接转发所有BOT</span></div></div>
-          <div class="form-row" style="grid-column:1/-1;display:${isServerAllBots(srv) ? 'none' : 'flex'};"><label>指定BOT</label><div>${renderServerBotSelect(i, srv)}</div></div>
-          <div class="form-row" style="grid-column:1/-1;"><label>Token</label><input type="text" value="${escHtml(srv.accessToken || '')}" onchange="updateServer(${i},'accessToken',this.value)" style="width:100%;"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>重连间隔</label>
+          <div class="ctl"><input type="number" min="0" value="${Number(srv.reconnectInterval ?? 5)}" onchange="updateServer(${i},'reconnectInterval',Number(this.value)||5)"><span class="hint">秒</span></div>
+        </div>
+        <div class="field">
+          <label>最大重连</label>
+          <div class="ctl"><input type="number" min="0" value="${Number(srv.maxReconnectAttempts ?? 0)}" onchange="updateServer(${i},'maxReconnectAttempts',Number(this.value)||0)"><span class="hint">次，0 = 不限</span></div>
+        </div>
+        <div class="field">
+          <label>全部 BOT</label>
+          <div class="ctl"><div class="toggle ${isServerAllBots(srv) ? 'on' : ''}" onclick="toggleServerBotsAll(${i},this)"></div><span class="hint">此连接转发所有 BOT</span></div>
+        </div>
+        ${isServerAllBots(srv) ? '' : `<div class="field stack"><label>指定 BOT</label><div class="ctl">${renderServerBotSelect(i, srv)}</div></div>`}
+        <div class="field stack">
+          <label>Token</label>
+          <div class="ctl"><input type="text" value="${escHtml(srv.accessToken || '')}" placeholder="可留空" onchange="updateServer(${i},'accessToken',this.value)" style="width:100%;"></div>
         </div>
       </div>
     `
@@ -638,64 +941,61 @@ function buildServers() {
   }))
 }
 
+// ── 拦截规则 ──
 function renderIntercepts() {
   const list = document.getElementById('interceptList')
   const items = configData.groupIntercept || []
-  if (items.length === 0) { list.innerHTML = '<p style="color:#aaa;font-size:12px;">暂无拦截规则</p>'; return }
+  if (items.length === 0) { list.innerHTML = '<p class="empty">暂无拦截规则</p>'; return }
   list.innerHTML = items.map((item, i) => `
-    <div class="sub-card">
-      <div class="sub-card-header">
-        <span class="sub-card-title">规则 #${i+1}</span>
-        <button class="btn btn-danger btn-xs" onclick="removeIntercept(${i})">删</button>
+    <div class="item">
+      <div class="item-head">
+        <div class="item-title">规则 #${i + 1}</div>
+        <div class="item-actions">
+          <button class="btn btn-danger btn-xs" onclick="removeIntercept(${i})">删除</button>
+        </div>
       </div>
-      <div class="form-row"><label>BOT</label><input type="text" value="${escHtml(item.botId||'')}" placeholder="留空=所有" onchange="updateIntercept(${i},'botId',this.value)"></div>
-      <div class="form-row"><label>群聊</label><div class="group-select-wrap" id="groupSelectWrap${i}"></div></div>
-      <div class="form-row"><label>前缀</label><div class="tag-list" id="interceptPrefixes${i}"></div></div>
+      <div class="field">
+        <label>BOT</label>
+        <div class="ctl"><input type="text" value="${escHtml(item.botId || '')}" placeholder="留空 = 所有" onchange="updateIntercept(${i},'botId',this.value)"></div>
+      </div>
+      <div class="field stack">
+        <label>群聊</label>
+        <div class="ctl"><div class="group-select-wrap" id="groupSelectWrap${i}"></div></div>
+      </div>
+      <div class="field stack">
+        <label>前缀</label>
+        <div class="ctl"><div class="tag-list" id="interceptPrefixes${i}"></div></div>
+      </div>
     </div>
   `).join('')
   items.forEach((item, i) => {
-    renderGroupSelect(i, item.groupIds||[])
-    renderTagList(`interceptPrefixes${i}`, item.prefixes||[], (v) => updateInterceptArr(i, 'prefixes', v))
+    renderGroupSelect(i, item.groupIds || [])
+    renderTagList(`interceptPrefixes${i}`, item.prefixes || [], (v) => updateInterceptArr(i, 'prefixes', v))
   })
 }
-// ── 群聊选择器 ──
+
+// ── 群聊选择器（拦截规则内） ──
 let groupList = []
 
 function renderGroupSelect(index, selectedIds) {
   const wrap = document.getElementById(`groupSelectWrap${index}`)
   if (!wrap) return
   const selected = selectedIds || []
-  const selectedLabels = selected.map(id => {
-    const g = groupList.find(g => g.value === id)
-    return g ? g.label : id
-  })
-  const selectedAvatars = selected.map(id => {
-    const g = groupList.find(g => g.value === id)
-    return g ? g.avatar : ''
-  })
   wrap.innerHTML = `
     <div class="group-select-trigger" onclick="toggleGroupDropdown(${index})">
       <span class="count">${selected.length > 0 ? '已选 ' + selected.length + ' 个群聊' : '选择群聊...'}</span>
-      <span class="arrow">▾</span>
+      <span class="arrow">▼</span>
     </div>
-    ${selected.length > 0 ? `<div class="group-select-tags" id="groupSelectTags${index}">
-      ${selected.map((id, si) => {
-        const g = groupList.find(g => g.value === id)
-        return `<span class="tag"><img class="tag-avatar" src="${escHtml(selectedAvatars[si])}" onerror="this.style.display='none'" loading="lazy"> ${escHtml(selectedLabels[si] || id)} <span class="rm" onclick="event.stopPropagation();removeGroup(${index},'${escHtml(id)}')">&times;</span></span>`
-      }).join('')}
-    </div>` : ''}
+    ${selected.length > 0 ? `<div class="group-select-tags" id="groupSelectTags${index}">${selected.map(id => groupTagHtml(`removeGroup(${index},${htmlJsArg(id)})`, id)).join('')}</div>` : ''}
     <div class="group-select-dropdown" id="groupDropdown${index}">
       ${groupList.length === 0
         ? '<div class="no-groups">暂无可用群聊</div>'
         : groupList.map(g => {
-            const checked = selected.includes(g.value) ? 'checked' : ''
-            const cls = checked ? 'selected' : ''
-            return `<div class="group-select-option ${cls}" data-value="${escHtml(g.value)}" onclick="toggleGroupOption(${index},'${escHtml(g.value)}',this)">
+            const checked = selected.includes(String(g.value)) ? 'checked' : ''
+            return `<div class="group-select-option ${checked ? 'selected' : ''}" onclick="toggleGroupOption(${index},'${escHtml(g.value)}',this)">
               <input type="checkbox" value="${escHtml(g.value)}" ${checked}>
               <img class="opt-avatar" src="${escHtml(g.avatar)}" onerror="this.style.display='none'" loading="lazy">
-              <div class="opt-info">
-                <div class="opt-name">${escHtml(g.group_name || g.label.split('-')[0])} <span class="opt-id">${escHtml(g.value)}</span></div>
-              </div>
+              <div class="opt-info"><div class="opt-name">${escHtml(g.group_name || String(g.label || '').split('-')[0])} <span class="opt-id">${escHtml(g.value)}</span></div></div>
             </div>`
           }).join('')}
     </div>
@@ -705,32 +1005,24 @@ function renderGroupSelect(index, selectedIds) {
 function toggleGroupDropdown(index) {
   const dd = document.getElementById(`groupDropdown${index}`)
   if (!dd) return
-  // 关闭其他所有下拉
   document.querySelectorAll('.group-select-dropdown').forEach(el => { if (el.id !== `groupDropdown${index}`) el.style.display = 'none' })
-  dd.style.display = dd.style.display === 'none' || dd.style.display === '' ? 'block' : 'none'
+  dd.style.display = (dd.style.display === 'none' || dd.style.display === '') ? 'block' : 'none'
 }
 
 function toggleGroupOption(index, value, el) {
   const cb = el.querySelector('input[type="checkbox"]')
   cb.checked = !cb.checked
-  const checked = cb.checked
-  // 更新选中样式
-  if (checked) el.classList.add('selected'); else el.classList.remove('selected')
-  // 更新数据
+  if (cb.checked) el.classList.add('selected'); else el.classList.remove('selected')
   const item = configData.groupIntercept?.[index]
   if (!item) return
   if (!item.groupIds) item.groupIds = []
-  if (checked) {
+  if (cb.checked) {
     if (!item.groupIds.includes(value)) item.groupIds.push(value)
   } else {
     item.groupIds = item.groupIds.filter(id => id !== value)
   }
-  // 更新触发区计数
   const countEl = document.querySelector(`#groupSelectWrap${index} .count`)
-  if (countEl) {
-    countEl.textContent = item.groupIds.length > 0 ? '已选 ' + item.groupIds.length + ' 个群聊' : '选择群聊...'
-  }
-  // 更新标签区
+  if (countEl) countEl.textContent = item.groupIds.length > 0 ? '已选 ' + item.groupIds.length + ' 个群聊' : '选择群聊...'
   updateGroupTags(index, item.groupIds)
   computeDirty()
 }
@@ -739,42 +1031,14 @@ function updateGroupTags(index, selectedIds) {
   const wrap = document.getElementById(`groupSelectWrap${index}`)
   if (!wrap) return
   let tagsDiv = document.getElementById(`groupSelectTags${index}`)
-  if (!selectedIds || selectedIds.length === 0) {
-    if (tagsDiv) tagsDiv.remove()
-    return
-  }
+  if (!selectedIds || selectedIds.length === 0) { if (tagsDiv) tagsDiv.remove(); return }
   if (!tagsDiv) {
     tagsDiv = document.createElement('div')
     tagsDiv.className = 'group-select-tags'
     tagsDiv.id = `groupSelectTags${index}`
     wrap.insertBefore(tagsDiv, wrap.querySelector('.group-select-dropdown'))
   }
-  const selectedLabels = selectedIds.map(id => {
-    const g = groupList.find(g => g.value === id)
-    return g ? g.label : id
-  })
-  const selectedAvatars = selectedIds.map(id => {
-    const g = groupList.find(g => g.value === id)
-    return g ? g.avatar : ''
-  })
-  tagsDiv.innerHTML = selectedIds.map((id, si) => {
-    return `<span class="tag"><img class="tag-avatar" src="${escHtml(selectedAvatars[si])}" onerror="this.style.display='none'" loading="lazy"> ${escHtml(selectedLabels[si] || id)} <span class="rm" onclick="event.stopPropagation();removeGroup(${index},'${escHtml(id)}')">&times;</span></span>`
-  }).join('')
-}
-
-function selectGroup(index, value, checked) {
-  const item = configData.groupIntercept?.[index]
-  if (!item) return
-  if (!item.groupIds) item.groupIds = []
-  if (checked) {
-    if (!item.groupIds.includes(value)) item.groupIds.push(value)
-  } else {
-    item.groupIds = item.groupIds.filter(id => id !== value)
-  }
-  renderGroupSelect(index, item.groupIds)
-  const dd = document.getElementById(`groupDropdown${index}`)
-  if (dd) dd.style.display = 'block'
-  computeDirty()
+  tagsDiv.innerHTML = selectedIds.map(id => groupTagHtml(`removeGroup(${index},${htmlJsArg(id)})`, id)).join('')
 }
 
 function removeGroup(index, value) {
@@ -794,13 +1058,14 @@ document.addEventListener('click', function(e) {
 
 function addIntercept() {
   if (!configData.groupIntercept) configData.groupIntercept = []
-  configData.groupIntercept.push({ botId:'', groupIds:[], prefixes:[] })
+  configData.groupIntercept.push({ botId: '', groupIds: [], prefixes: [] })
   renderIntercepts(); computeDirty()
 }
-function removeIntercept(i) { configData.groupIntercept.splice(i,1); renderIntercepts(); computeDirty() }
+function removeIntercept(i) { configData.groupIntercept.splice(i, 1); renderIntercepts(); computeDirty() }
 function updateIntercept(i, key, val) { if (configData.groupIntercept[i]) { configData.groupIntercept[i][key] = val; computeDirty() } }
 function updateInterceptArr(i, key, val) { if (configData.groupIntercept[i]) { configData.groupIntercept[i][key] = val; computeDirty() } }
 
+// ── 标签列表 ──
 function renderTagArea(id, items, key) {
   renderTagListIn(document.getElementById(id), items, (arr) => { configData[key] = arr; computeDirty() })
 }
@@ -822,30 +1087,38 @@ function renderTagListIn(el, items, onChange) {
     el.appendChild(span)
   })
   const wrap = document.createElement('span'); wrap.className = 'tag-input-wrap'
-  wrap.innerHTML = '<input class="tag-add-input" placeholder="添加..."><button class="btn btn-xs">+</button>'
+  wrap.innerHTML = '<input type="text" class="tag-add-input" placeholder="添加..."><button class="btn btn-xs">+</button>'
   el.appendChild(wrap)
-  el.querySelectorAll('.rm').forEach(el => { el.onclick = () => removeFn(Number(el.dataset.idx)) })
+  el.querySelectorAll('.rm').forEach(node => { node.onclick = () => removeFn(Number(node.dataset.idx)) })
   const btn = wrap.querySelector('button'), inp = wrap.querySelector('input')
-  btn.onclick = addFn; inp.onkeydown = (e) => { if (e.key==='Enter') { e.preventDefault(); addFn() } }
+  btn.onclick = addFn
+  inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addFn() } }
 }
 function renderTagList(id, items, onChange) { renderTagListIn(document.getElementById(id), items, onChange) }
 
+// ── 前缀规则 ──
 function renderPrefixes() {
   const list = document.getElementById('prefixList')
   const prefixMap = configData.gsuidBotPrefix || {}
   const keys = Object.keys(prefixMap)
-  if (keys.length === 0) { list.innerHTML = '<p style="color:#aaa;font-size:12px;">暂无前缀规则</p>'; return }
+  if (keys.length === 0) { list.innerHTML = '<p class="empty">暂无前缀规则</p>'; return }
   list.innerHTML = keys.map(selfId => {
     const item = prefixMap[selfId]
     return `
-    <div class="sub-card">
-      <div class="sub-card-header">
-        <span class="sub-card-title">BOT: ${escHtml(selfId)}</span>
-        <button class="btn btn-danger btn-xs" onclick="removePrefix('${escHtml(selfId)}')">删</button>
+    <div class="item">
+      <div class="item-head">
+        <div class="item-title">BOT <span class="mono">${escHtml(selfId)}</span></div>
+        <div class="item-actions">
+          <button class="btn btn-danger btn-xs" onclick="removePrefix('${escHtml(selfId)}')">删除</button>
+        </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
-        <div class="form-row"><label>前缀</label><input type="text" value="${escHtml(item.prefix||'')}" onchange="updatePrefix('${escHtml(selfId)}','prefix',this.value)"></div>
-        <div class="form-row"><label>有前缀不插入</label><div class="toggle-wrap"><div class="toggle ${item.skipIfHasPrefix!==false?'on':''}" onclick="togglePrefix(this,'${escHtml(selfId)}')"></div></div></div>
+      <div class="field">
+        <label>前缀</label>
+        <div class="ctl"><input type="text" value="${escHtml(item.prefix || '')}" onchange="updatePrefix('${escHtml(selfId)}','prefix',this.value)"></div>
+      </div>
+      <div class="field">
+        <label>有前缀不插入</label>
+        <div class="ctl"><div class="toggle ${item.skipIfHasPrefix !== false ? 'on' : ''}" onclick="togglePrefix(this,'${escHtml(selfId)}')"></div></div>
       </div>
     </div>`
   }).join('')
@@ -856,10 +1129,10 @@ function togglePrefix(el, selfId) {
   computeDirty()
 }
 function addPrefix() {
-  const selfId = prompt('请输入BOT账号(self_id):')
+  const selfId = prompt('请输入 BOT 账号 (self_id):')
   if (!selfId || !selfId.trim()) return
   if (!configData.gsuidBotPrefix) configData.gsuidBotPrefix = {}
-  configData.gsuidBotPrefix[selfId.trim()] = { prefix:'', skipIfHasPrefix:true, noPrefixCommands:[] }
+  configData.gsuidBotPrefix[selfId.trim()] = { prefix: '', skipIfHasPrefix: true, noPrefixCommands: [] }
   renderPrefixes(); computeDirty()
 }
 function removePrefix(selfId) { delete configData.gsuidBotPrefix[selfId]; renderPrefixes(); computeDirty() }
@@ -887,30 +1160,27 @@ function renderBoundGroupSelect(wrapId) {
   wrap.innerHTML = `
     <div class="group-select-trigger" onclick="toggleBoundGroupDropdown('${wrapId}')">
       <span class="count">${selected.length > 0 ? '已选 ' + selected.length + ' 个群聊' : binding.placeholder}</span>
-      <span class="arrow">▾</span>
+      <span class="arrow">▼</span>
     </div>
-    ${selected.length > 0 ? `<div class="group-select-tags">
-      ${selected.map(id => groupTagHtml(wrapId, id)).join('')}
-    </div>` : ''}
-    ${binding.allowManual ? `<div class="tag-input-wrap" style="margin-top:4px;"><input class="manual-group-input" placeholder="手动添加群 ID"><button class="btn btn-xs" onclick="addBoundGroup('${wrapId}')">+</button></div>` : ''}
+    ${selected.length > 0 ? `<div class="group-select-tags">${selected.map(id => groupTagHtml(`removeBoundGroup(${htmlJsArg(wrapId)},${htmlJsArg(id)})`, id)).join('')}</div>` : ''}
+    ${binding.allowManual ? `<div class="tag-input-wrap" style="margin-top:8px;"><input type="text" class="manual-group-input" placeholder="手动添加群 ID"><button class="btn btn-xs" onclick="addBoundGroup('${wrapId}')">+</button></div>` : ''}
     <div class="group-select-dropdown" id="${wrapId}Dropdown">
       ${groupList.length === 0 ? '<div class="no-groups">暂无可用群聊，可手动添加 ID</div>' : groupList.map(groupOptionHtml.bind(null, wrapId, selected)).join('')}
     </div>
   `
 }
 
-function groupTagHtml(wrapId, id) {
-  const group = groupList.find(item => String(item.value) === id)
+function groupTagHtml(removeCall, id) {
+  const group = groupList.find(item => String(item.value) === String(id))
   const label = group ? group.label : id
   const avatar = group?.avatar || ''
-  return `<span class="tag"><img class="tag-avatar" src="${escHtml(avatar)}" onerror="this.style.display='none'" loading="lazy"> ${escHtml(label)} <span class="rm" onclick="event.stopPropagation();removeBoundGroup(${htmlJsArg(wrapId)},${htmlJsArg(id)})">&times;</span></span>`
+  return `<span class="tag"><img class="tag-avatar" src="${escHtml(avatar)}" onerror="this.style.display='none'" loading="lazy"> ${escHtml(label)} <span class="rm" onclick="event.stopPropagation();${removeCall}">&times;</span></span>`
 }
 
 function groupOptionHtml(wrapId, selected, group) {
   const value = String(group.value)
   const checked = selected.includes(value) ? 'checked' : ''
-  const cls = checked ? 'selected' : ''
-  return `<div class="group-select-option ${cls}" onclick="toggleBoundGroupOption(event,${htmlJsArg(wrapId)},${htmlJsArg(value)},this)">
+  return `<div class="group-select-option ${checked ? 'selected' : ''}" onclick="toggleBoundGroupOption(event,${htmlJsArg(wrapId)},${htmlJsArg(value)},this)">
     <input type="checkbox" value="${escHtml(value)}" ${checked}>
     <img class="opt-avatar" src="${escHtml(group.avatar || '')}" onerror="this.style.display='none'" loading="lazy">
     <div class="opt-info"><div class="opt-name">${escHtml(group.group_name || String(group.label || '').split('-')[0])} <span class="opt-id">${escHtml(value)}</span></div></div>
@@ -922,15 +1192,15 @@ function toggleBoundGroupDropdown(wrapId) {
   const dropdown = document.getElementById(dropdownId)
   if (!dropdown) return
   document.querySelectorAll('.group-select-dropdown').forEach(el => { if (el.id !== dropdownId) el.style.display = 'none' })
-  dropdown.style.display = dropdown.style.display === 'none' || dropdown.style.display === '' ? 'block' : 'none'
+  dropdown.style.display = (dropdown.style.display === 'none' || dropdown.style.display === '') ? 'block' : 'none'
 }
 
-function toggleBoundGroupOption(event, wrapId, value, el) {
+function toggleBoundGroupOption(event, wrapId, value) {
   event.preventDefault()
   const binding = groupSelectBindings[wrapId]
   if (!binding) return
-  const checked = !binding.values.includes(value)
-  updateBoundGroupValues(wrapId, checked ? [...binding.values, value] : binding.values.filter(id => id !== value))
+  const exists = binding.values.includes(value)
+  updateBoundGroupValues(wrapId, exists ? binding.values.filter(id => id !== value) : [...binding.values, value])
 }
 
 function addBoundGroup(wrapId) {
@@ -946,7 +1216,7 @@ function addBoundGroup(wrapId) {
 function removeBoundGroup(wrapId, value) {
   const binding = groupSelectBindings[wrapId]
   if (!binding) return
-  updateBoundGroupValues(wrapId, binding.values.filter(id => id !== value))
+  updateBoundGroupValues(wrapId, binding.values.filter(id => String(id) !== String(value)))
 }
 
 function updateBoundGroupValues(wrapId, values) {
@@ -969,17 +1239,17 @@ function renderLegacyGroups() {
 function renderLegacyBots() {
   const wrap = document.getElementById('legacyBotList')
   if (!wrap) return
-  if (botList.length === 0) { wrap.innerHTML = '<span class="hint">暂无已连接BOT</span>'; return }
+  if (botList.length === 0) { wrap.innerHTML = '<span class="hint">暂无已连接 BOT</span>'; return }
   const selected = ensureMessageBuild().legacyReply.bots
-  wrap.innerHTML = botList.map(bot => {
+  wrap.innerHTML = '<div class="checks">' + botList.map(bot => {
     const value = String(bot.value)
     const checked = selected.includes(value) ? 'checked' : ''
-    return `<label style="margin-right:8px;font-size:12px;cursor:pointer;"><input type="checkbox" value="${escHtml(value)}" ${checked} class="legacy-bot-check" onchange="toggleLegacyBot()"> ${escHtml(bot.label)}</label>`
-  }).join('')
+    return `<label><input type="checkbox" value="${escHtml(value)}" ${checked} class="legacy-bot-check" onchange="toggleLegacyBot()"> ${escHtml(bot.label)}</label>`
+  }).join('') + '</div>'
 }
 
 function toggleLegacyBot() {
-  ensureMessageBuild().legacyReply.bots = [...document.querySelectorAll('.legacy-bot-check:checked')].map(checkbox => checkbox.value)
+  ensureMessageBuild().legacyReply.bots = [...document.querySelectorAll('.legacy-bot-check:checked')].map(cb => cb.value)
   computeDirty()
 }
 
@@ -995,7 +1265,7 @@ async function saveConfig() {
   } catch(e) { showToast('保存失败: ' + e.message, 'error') }
 }
 
-function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
 function htmlJsArg(value) { return escHtml(JSON.stringify(String(value))) }
 
 // 地址解析：从完整地址提取协议、主机、端口和路径
