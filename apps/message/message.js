@@ -1,9 +1,27 @@
 import { sendSocketList, Config, Version } from '../../components/index.js'
 import { isQQBotMessage, markGuideActiveWindow } from '../../components/MessageBuild.js'
-import { makeGSUidReportMsg, setLatestMsg, setMsg, getGroup_id, getUser_id } from '../../model/index.js'
+import { makeGSUidReportMsg, makeGSUidMetaReportMsg, setLatestMsg, setMsg, getGroup_id, getUser_id } from '../../model/index.js'
 import _ from 'lodash'
 import cfg from '../../../../lib/config/config.js'
 import PluginsLoader from '../../../../lib/plugins/loader.js'
+
+// 取消息开头的“有效指令文本”：跳过前置的@提及（at 段 / CQ 码 / 纯文本@）及其后的空格
+function getLeadingCleanText (message) {
+  const segs = Array.isArray(message) ? message : []
+  let text = ''
+  for (const seg of segs) {
+    if (!seg) continue
+    if (seg.type === 'at') continue
+    if (seg.type !== 'text') break
+    text += seg.text || ''
+    if (text.trim()) break
+  }
+  return text
+    .replace(/^[\s\u3000]+/, '')
+    .replace(/^(\[CQ:at,[^\]]*\]\s*)+/, '')
+    .replace(/^(@\S+\s*)+/, '')
+    .replace(/^[\s\u3000]+/, '')
+}
 
 Bot.on('message', async e => {
   if (!e.user_id) return false
@@ -17,54 +35,23 @@ Bot.on('message', async e => {
   if (sendSocketList.length == 0) return false
   // 联动 yunzai 的仅@设置：yunzai 判定为非主动提及的消息不上报（"忽略仅@"开启时不生效）
   if (!Config.ignoreOnlyReplyAt && isYunzaiOnlyReplyAtBlocked(e)) return false
-  if (e.group_id) {
-    // 判断云崽白名单群
-    const whiteGroup = Config.whiteGroup
-    if (Array.isArray(whiteGroup) && whiteGroup.length > 0) {
-      if (!whiteGroup.some(i => i == e.group_id)) return false
-    }
-    // 判断插件白名单群
-    const yesGroup = Config.yesGroup
-    if (Array.isArray(yesGroup) && yesGroup.length > 0) {
-      if (!yesGroup.some(i => i == e.group_id)) return false
-    }
-    // 判断云崽黑名单群
-    const blackGroup = Config.blackGroup
-    if (Array.isArray(blackGroup) && blackGroup.length > 0) {
-      if (blackGroup.some(i => i == e.group_id)) return false
-    }
-    // 判断插件黑名单群
-    const noGroup = Config.noGroup
-    if (Array.isArray(noGroup) && noGroup.length > 0) {
-      if (noGroup.some(i => i == e.group_id)) return false
-    }
-  }
-  // 判断云崽黑名单QQ
-  if (e.user_id && Array.isArray(Config.blackQQ)) {
-    if (Config.blackQQ.some(i => i == e.user_id)) return false
-  }
-  // 判断插件前缀
+  if (isReportBlocked(e)) return false
+  // 判断插件前缀（跳过前置@提及及@后的空格再匹配）
   if (Array.isArray(Config.noMsgStart) && Config.noMsgStart.length > 0) {
-    if (e.message?.[0]?.type === 'text') {
-      if (Config.noMsgStart.some(i => e.message[0].text.startsWith(i))) return false
-    }
+    const cleanText = getLeadingCleanText(e.message)
+    if (cleanText && Config.noMsgStart.some(i => cleanText.startsWith(i))) return false
   }
   // 群聊消息拦截（按群聊+前缀+bot账号）
   if (e.group_id && Array.isArray(Config.groupIntercept) && Config.groupIntercept.length > 0) {
-    const textSeg = e.message?.find(m => m.type === 'text')
-    if (textSeg) {
-      let rawText = textSeg.text || ''
-      // 去掉前面的@提及（CQ码格式和纯文本格式）
-      let cleanText = rawText.replace(/^(\[CQ:at,[^\]]*\]\s*)+/, '').replace(/^(@\S+\s*)+/, '')
-      for (const rule of Config.groupIntercept) {
-        // 检查botId（不填则对所有bot生效）
-        if (rule.botId && String(rule.botId) !== String(e.self_id)) continue
-        // 检查群聊ID
-        if (!Array.isArray(rule.groupIds) || !rule.groupIds.some(id => String(id) === String(e.group_id))) continue
-        // 检查前缀
-        if (Array.isArray(rule.prefixes) && rule.prefixes.some(p => cleanText.startsWith(p))) {
-          return false
-        }
+    const cleanText = getLeadingCleanText(e.message)
+    for (const rule of Config.groupIntercept) {
+      // 检查botId（不填则对所有bot生效）
+      if (rule.botId && String(rule.botId) !== String(e.self_id)) continue
+      // 检查群聊ID
+      if (!Array.isArray(rule.groupIds) || !rule.groupIds.some(id => String(id) === String(e.group_id))) continue
+      // 检查前缀
+      if (cleanText && Array.isArray(rule.prefixes) && rule.prefixes.some(p => cleanText.startsWith(p))) {
+        return false
       }
     }
   }
@@ -150,24 +137,8 @@ Bot.on('message', async e => {
       if (!tmpMsg) continue
       let reportMsg = null
 
-      const adapterId = e.bot?.adapter?.id
-      const botIdMap = {
-        QQBot: 'qqgroup',
-        QQGuild: 'qqguild',
-        KOOK: 'kook',
-        Telegram: 'telegram',
-        Discord: 'discord'
-      }
-      const mappedBotId = botIdMap[adapterId]
-      let botid = i.adapter?.gsBotId
-
-      if (i.uin === 'all') {
-        botid = mappedBotId || 'onebot'
-      } else if (i.uin != e.self_id) {
-        continue
-      } else if (!botid) {
-        botid = mappedBotId || 'onebot'
-      }
+      const botid = resolveGsBotId(i, e)
+      if (!botid) continue
 
       // 从被引用消息中提取图片，注入到消息数组中
       const replyId = tmpMsg.source?.message_id || e.reply_id
@@ -471,6 +442,95 @@ function onlyReplyAt (e, source = 'gs') {
     return false
   }
   return e
+}
+
+// ── 戳一戳上报：平台 notice 事件 → GS meta 事件 ──
+Bot.on('notice', async e => {
+  // 各适配器（OneBotv11/Milky/ComWeChat）都会把戳一戳归一化为 sub_type === 'poke'，
+  // 且 notice_type 已被改写成 group/friend，不能再按 notify 判断。
+  if (e.sub_type !== 'poke') return false
+  if (!Config.pokeReport) return false
+  // 归一化后 operator_id 与 user_id 都指向发起者
+  const pokerId = String(e.operator_id || e.user_id || '')
+  if (!pokerId) return false
+  if (Config.shutdownStop && isYunzaiPoweredOff()) return false
+  if (sendSocketList.length == 0) return false
+  if (isReportBlocked(e, pokerId)) return false
+
+  const group_id = e.group_id ? String(e.group_id) : ''
+  // 平台不提供 target_id 时，被戳者即机器人自身
+  const data = {
+    user_id: pokerId,
+    target_id: String(e.target_id || e.self_id || '')
+  }
+  if (group_id) data.group_id = group_id
+
+  const ctx = {
+    self_id: e.self_id,
+    user_id: pokerId,
+    group_id,
+    user_pm: e.isMaster ? 1 : 6,
+    sender: await resolvePokeSender(e, pokerId)
+  }
+
+  for (const i of sendSocketList) {
+    if (i.status != 1) continue
+    const botid = resolveGsBotId(i, e)
+    if (!botid) continue
+    i.ws.send(makeGSUidMetaReportMsg('poke', data, { ...ctx, botId: botid }))
+  }
+})
+
+// 解析某条连接对应的 gsBotId；返回 null 表示该连接不处理当前 bot
+function resolveGsBotId (socket, e) {
+  const botIdMap = {
+    QQBot: 'qqgroup',
+    QQGuild: 'qqguild',
+    KOOK: 'kook',
+    Telegram: 'telegram',
+    Discord: 'discord'
+  }
+  const mappedBotId = botIdMap[e.bot?.adapter?.id]
+  if (socket.uin === 'all') return mappedBotId || 'onebot'
+  if (socket.uin != e.self_id) return null
+  return socket.adapter?.gsBotId || mappedBotId || 'onebot'
+}
+
+// 群聊黑白名单与黑名单QQ过滤；返回 true 表示应跳过上报
+function isReportBlocked (e, userId = e.user_id) {
+  if (e.group_id) {
+    const whiteGroup = Config.whiteGroup
+    if (Array.isArray(whiteGroup) && whiteGroup.length > 0 && !whiteGroup.some(i => i == e.group_id)) return true
+    const yesGroup = Config.yesGroup
+    if (Array.isArray(yesGroup) && yesGroup.length > 0 && !yesGroup.some(i => i == e.group_id)) return true
+    const blackGroup = Config.blackGroup
+    if (Array.isArray(blackGroup) && blackGroup.length > 0 && blackGroup.some(i => i == e.group_id)) return true
+    const noGroup = Config.noGroup
+    if (Array.isArray(noGroup) && noGroup.length > 0 && noGroup.some(i => i == e.group_id)) return true
+  }
+  if (userId && Array.isArray(Config.blackQQ)) {
+    if (Config.blackQQ.some(i => i == userId)) return true
+  }
+  return false
+}
+
+// 戳一戳发起者的昵称/头像；notice 事件通常不带 sender 资料，取不到就留空由 GS 侧回查用户库
+async function resolvePokeSender (e, userId) {
+  const sender = {}
+  const nickname = e.sender?.nickname || e.sender?.card
+  if (nickname) sender.nickname = String(nickname)
+  const uid = String(userId || e.operator_id || e.user_id || '')
+  if (!e.group_id || !uid) return sender
+  try {
+    const member = await e.bot?.pickMember?.(e.group_id, uid)
+    if (!sender.nickname) {
+      const name = member?.info?.nickname || member?.info?.card || member?.nickname || member?.card
+      if (name) sender.nickname = String(name)
+    }
+    const avatar = await member?.getAvatarUrl?.()
+    if (avatar) sender.avatar = String(avatar)
+  } catch (_) {}
+  return sender
 }
 
 export {

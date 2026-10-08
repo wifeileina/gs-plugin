@@ -460,6 +460,40 @@ export function supportGuoba() {
           component: 'Switch',
         },
         {
+          field: 'gs.pokeReport',
+          label: '戳一戳上报',
+          bottomHelpMessage: '戳一戳上报为 GS meta 事件，供 GS 侧插件监听',
+          component: 'Switch',
+        },
+        {
+          component: 'Divider',
+          label: '文件传输'
+        },
+        {
+          field: 'gs.fileUrlEnabled',
+          label: 'URL 开关',
+          bottomHelpMessage: '文件上报 GS 时可用链接代替 base64；关闭后一律内嵌 base64',
+          component: 'Switch',
+        },
+        {
+          field: 'gs.fileUrlAlways',
+          label: '全量 URL',
+          bottomHelpMessage: '开启后所有文件都直接上报链接（忽略阈值）',
+          component: 'Switch',
+        },
+        {
+          field: 'gs.fileUrlThreshold',
+          label: 'URL 阈值',
+          bottomHelpMessage: '文件超过该大小时自动改用链接上报，避免 base64 撑爆 WebSocket 帧',
+          component: 'InputNumber',
+          required: true,
+          componentProps: {
+            min: 0,
+            placeholder: '15',
+            addonAfter: 'MB'
+          },
+        },
+        {
           field: 'gs.msgStoreTime',
           label: '消息存储时间',
           bottomHelpMessage: '消息存储时间，用于回复消息',
@@ -507,6 +541,12 @@ export function supportGuoba() {
         if (gs.mergeForwardTextOnly === undefined) gs.mergeForwardTextOnly = true
         // 确保 mergeForwardFlatten 有默认值
         if (gs.mergeForwardFlatten === undefined) gs.mergeForwardFlatten = true
+        // 确保 pokeReport 有默认值
+        if (gs.pokeReport === undefined) gs.pokeReport = true
+        // 确保文件传输配置有默认值
+        if (gs.fileUrlEnabled === undefined) gs.fileUrlEnabled = false
+        if (gs.fileUrlAlways === undefined) gs.fileUrlAlways = false
+        if (gs.fileUrlThreshold === undefined) gs.fileUrlThreshold = 15
         const messageBuild = Config.messageBuild
         gs.messageBuildLegacyReplyEnabled = messageBuild.legacyReply.enabled
         gs.messageBuildLegacyReplyGroups = messageBuild.legacyReply.groups

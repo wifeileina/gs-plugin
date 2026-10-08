@@ -14,6 +14,7 @@
 - <del>配置文件热更新，无需重启</del> 配置后重启生效
 - 支持 **锅巴面板** 可视化配置
 - 增加兑换码转Markdown
+- 戳一戳事件上报（封装为 GS meta 事件 `meta-poke`，供 GS 侧 `on_meta("poke")` 的插件接收）
 ###### 释
 
 - legacy会在QQBot-plugin设置为raw时，强制使gscore消息转为普通消息发送
@@ -94,6 +95,7 @@ howToMaster: 0              # 0=通知所有主人, >0=通知指定序号
 # ── 其他 ──
 msgStoreTime: 300           # 消息存储时间（秒），0=不存储
 tempMsgReport: false        # 是否上报临时会话
+pokeReport: true            # 是否上报戳一戳（GS meta 事件 meta-poke）
 taskQueue: 0                # 数据库同步锁（0=关闭）
 ```
 

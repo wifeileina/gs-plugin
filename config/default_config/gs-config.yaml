@@ -74,6 +74,16 @@ mergeForwardFlatten: true
 mergeForwardTextOnly: true
 # 临时会话是否上报
 tempMsgReport: false
+# 戳一戳是否上报
+# 上报为 GS meta 事件（meta-poke），需 GS 侧插件用 on_meta("poke") 接收
+pokeReport: true
+# 文件URL传输：文件消息上报 GS 时，用链接代替 base64，避免大文件撑爆 WebSocket 帧
+# fileUrlEnabled: URL 总开关，默认关闭；关闭后一律内嵌 base64
+# fileUrlAlways: 全量URL，开启后所有文件都直接上报链接（忽略阈值）
+# fileUrlThreshold: URL阈值(MB)，文件超过该大小时自动改用链接上报
+fileUrlEnabled: false
+fileUrlAlways: false
+fileUrlThreshold: 15
 # 消息构造：QQBot 回包的 Legacy 与主动消息
 messageBuild:
   # 单次回包使用 Legacy，避免改变 QQBot 全局 raw 配置

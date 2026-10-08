@@ -146,6 +146,23 @@ class Config {
     return this.getDefOrConfig('gs-config').tempMsgReport
   }
 
+  get pokeReport () {
+    return this.getDefOrConfig('gs-config').pokeReport !== false
+  }
+
+  get fileUrlEnabled () {
+    return this.getDefOrConfig('gs-config').fileUrlEnabled === true
+  }
+
+  get fileUrlAlways () {
+    return this.getDefOrConfig('gs-config').fileUrlAlways === true
+  }
+
+  get fileUrlThreshold () {
+    const value = Number(this.getDefOrConfig('gs-config').fileUrlThreshold)
+    return Number.isFinite(value) && value >= 0 ? value : 15
+  }
+
   get legacyReply () {
     return this.messageBuild.legacyReply
   }

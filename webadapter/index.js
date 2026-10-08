@@ -48,6 +48,10 @@ export function init(ctx) {
           mergeForwardTextOnly: cfg.mergeForwardTextOnly !== false,
           ignoreOnlyReplyAt: cfg.ignoreOnlyReplyAt !== false,
           tempMsgReport: cfg.tempMsgReport === true,
+          pokeReport: cfg.pokeReport !== false,
+          fileUrlEnabled: cfg.fileUrlEnabled === true,
+          fileUrlAlways: cfg.fileUrlAlways === true,
+          fileUrlThreshold: cfg.fileUrlThreshold ?? 15,
           // 保留 legacyReply 字段供旧 Web 前端读取；新前端统一使用 messageBuild。
           legacyReply: Config.messageBuild.legacyReply,
           messageBuild: Config.messageBuild,
@@ -73,7 +77,8 @@ export function init(ctx) {
       const allowedKeys = [
         'pluginEnabled', 'enabledBots', 'servers', 'groupIntercept',
         'noMsgStart', 'noMsgInclude', 'noGroup', 'yesGroup',
-        'muteStop', 'shutdownStop', 'ignoreOnlyReplyAt', 'tempMsgReport', 'legacyReply', 'messageBuild',
+        'muteStop', 'shutdownStop', 'ignoreOnlyReplyAt', 'tempMsgReport', 'pokeReport', 'legacyReply', 'messageBuild',
+        'fileUrlEnabled', 'fileUrlAlways', 'fileUrlThreshold',
         'mergeForward', 'mergeForwardFlatten', 'mergeForwardTextOnly',
         'disconnectToMaster', 'reconnectToMaster', 'firstconnectToMaster',
         'msgStoreTime', 'taskQueue', 'heartbeatInterval', 'gsuidBotPrefix', 'gsuidPrefixIgnore'

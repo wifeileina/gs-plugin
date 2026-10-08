@@ -40,9 +40,10 @@ async function makeGSUidReportMsg (e, botId = 'onebot') {
         })
         break
       case 'text':
-        if (Config.noMsgInclude.length > 0 && Array.isArray(Config.noMsgInclude)) {
+        // 命中「不转发包含」时返回 null（不可返回 []：空数组为真值，会被当作消息发送，产生空帧）
+        if (Array.isArray(Config.noMsgInclude) && Config.noMsgInclude.length > 0) {
           if (Config.noMsgInclude.some(item => i.text.includes(item))) {
-            return []
+            return null
           }
         }
         message.push({
@@ -53,7 +54,7 @@ async function makeGSUidReportMsg (e, botId = 'onebot') {
       case 'image':
         message.push({
           type: 'image',
-          data: i.url
+          data: cleanGSUidUrl(i.url)
         })
         break
       case 'file': {
@@ -64,23 +65,26 @@ async function makeGSUidReportMsg (e, botId = 'onebot') {
           name = i.name
         } else {
           // 群聊文件 / TRSS 私聊文件：从消息段中获取 URL
-          fileUrl = i.url || i.file || i.data?.url
+          fileUrl = cleanGSUidUrl(i.url || i.file || i.data?.url)
           name = i.name || i.data?.name || i.filename || 'file'
         }
         if (fileUrl) {
-          try {
-            let res = await fetch(fileUrl)
-            let arrayBuffer = await res.arrayBuffer()
-            let buffer = Buffer.from(arrayBuffer)
-            let base64 = buffer.toString('base64')
-            message.push({
-              type: 'file',
-              data: `${name}|${base64}`
-            })
-          } catch (err) {
-            logger.debug(`[gs-plugin] 下载文件失败: ${err.message}`)
-          }
+          const seg = await buildGSUidFileSeg(fileUrl, name)
+          if (seg) message.push(seg)
         }
+        break
+      }
+      case 'record':
+      case 'voice':
+      case 'audio': {
+        // 语音/视频按协议要求上报 base64:// 形式
+        const media = await resolveGSUidMedia(i)
+        if (media) message.push({ type: 'record', data: media })
+        break
+      }
+      case 'video': {
+        const media = await resolveGSUidMedia(i)
+        if (media) message.push({ type: 'video', data: media })
         break
       }
       case 'reply': {
@@ -126,6 +130,14 @@ async function makeGSUidReportMsg (e, botId = 'onebot') {
       user_pm = 3
     }
   }
+  const senderInfo = {
+    ...e.sender,
+    user_id: String(e.user_id)
+  }
+  // 部分适配器（OneBot）会把头像/图片 URL 用反引号包裹，统一剥掉
+  const avatar = e.avatar || senderInfo.avatar
+  if (avatar) senderInfo.avatar = cleanGSUidUrl(avatar)
+
   const MessageReceive = {
     bot_id: botId,
     bot_self_id: String(e.self_id),
@@ -133,13 +145,7 @@ async function makeGSUidReportMsg (e, botId = 'onebot') {
     user_id: String(e.user_id),
     user_pm,
     content: message,
-    sender: {
-      ...e.sender,
-      user_id: String(e.user_id)
-    }
-  }
-  if (e.avatar) {
-    MessageReceive.sender.avatar = e.avatar
+    sender: senderInfo
   }
   if (e.isGroup) {
     MessageReceive.user_type = 'group'
@@ -147,6 +153,36 @@ async function makeGSUidReportMsg (e, botId = 'onebot') {
   } else if (e.isGuild) {
     MessageReceive.user_type = 'channel'
     MessageReceive.group_id = String(e.group_id)
+  } else {
+    MessageReceive.user_type = 'direct'
+  }
+  return Buffer.from(JSON.stringify(MessageReceive))
+}
+
+/**
+ * 制作gsuid_core元事件上报消息（戳一戳等平台通知类事件）
+ * content 只能放单个 meta-<事件名> 段，混入文本会导致整包走 meta 分发路径而跳过命令触发器
+ * @param {string} eventName 事件名，不含 meta- 前缀
+ * @param {object} data 事件字段，id 值统一转字符串
+ * @param {object} ctx { botId, self_id, user_id, group_id, user_pm, sender }
+ */
+function makeGSUidMetaReportMsg (eventName, data, ctx = {}) {
+  const sender = ctx.sender ? { ...ctx.sender } : {}
+  if (sender.avatar) sender.avatar = cleanGSUidUrl(sender.avatar)
+
+  const group_id = ctx.group_id ? String(ctx.group_id) : ''
+  const MessageReceive = {
+    bot_id: ctx.botId || 'onebot',
+    bot_self_id: String(ctx.self_id || ''),
+    msg_id: '',
+    user_id: String(ctx.user_id || ''),
+    user_pm: ctx.user_pm ?? 6,
+    content: [{ type: `meta-${eventName}`, data }],
+    sender
+  }
+  if (group_id) {
+    MessageReceive.user_type = 'group'
+    MessageReceive.group_id = group_id
   } else {
     MessageReceive.user_type = 'direct'
   }
@@ -165,6 +201,94 @@ function stringifyGSUidId (v) {
 function cleanGSUidUrl (v) {
   if (typeof v !== 'string') return v
   return v.replace(/^`+|`+$/g, '')
+}
+
+const MEDIA_FETCH_TIMEOUT = 10000
+
+/**
+ * 把 record/video 段转成 gs 要求的 base64:// 形式。
+ * 协议端常只给本地路径（file:// 或绝对路径），此时直接读盘；否则按 http(s) 下载。
+ * 两者都失败时，若是 http(s) 链接则原样返回交给 core 自行拉取，否则放弃该段。
+ */
+async function resolveGSUidMedia (seg) {
+  const raw = seg?.url || seg?.file || seg?.data?.url || seg?.data?.file || ''
+  const value = cleanGSUidUrl(String(raw || '').trim())
+  if (!value) return ''
+  if (value.startsWith('base64://')) return value
+
+  let filePath = ''
+  if (value.startsWith('file://')) filePath = decodeURIComponent(value.slice(7))
+  else if (value.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(value)) filePath = value
+
+  if (filePath) {
+    try {
+      const buffer = await fs.promises.readFile(filePath)
+      return `base64://${buffer.toString('base64')}`
+    } catch (err) {
+      logger.debug(`[gs-plugin] 读取本地媒体失败: ${err.message}`)
+    }
+  }
+
+  if (/^https?:/i.test(value)) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), MEDIA_FETCH_TIMEOUT)
+    try {
+      const res = await fetch(value, { signal: controller.signal })
+      const buffer = Buffer.from(await res.arrayBuffer())
+      return `base64://${buffer.toString('base64')}`
+    } catch (err) {
+      logger.debug(`[gs-plugin] 下载媒体失败: ${err.message}`)
+      return value
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  return ''
+}
+
+const FILE_URL_HEAD_TIMEOUT = 8000
+
+/** 探测远端文件体积；不支持 HEAD 或无 content-length 时返回 0 */
+async function probeGSUidFileSize (url) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), FILE_URL_HEAD_TIMEOUT)
+  try {
+    const res = await fetch(url, { method: 'HEAD', signal: controller.signal })
+    const len = Number(res.headers.get('content-length'))
+    return Number.isFinite(len) && len > 0 ? len : 0
+  } catch (err) {
+    return 0
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * 构造文件上报段。GS 侧按 `名称|值` 解析，值以 http(s) 开头即判定为 URL 模式。
+ * URL 开关开启且（全量 / 超阈值）时直接上报链接，否则下载后内嵌 base64。
+ */
+async function buildGSUidFileSeg (fileUrl, name) {
+  const enabled = Config.fileUrlEnabled && /^https?:/i.test(String(fileUrl))
+  const threshold = Config.fileUrlThreshold * 1024 * 1024
+  const urlSeg = { type: 'file', data: `${name}|${fileUrl}` }
+
+  if (enabled && Config.fileUrlAlways) return urlSeg
+  if (enabled) {
+    const size = await probeGSUidFileSize(fileUrl)
+    if (size > 0 && size > threshold) return urlSeg
+  }
+
+  try {
+    const res = await fetch(fileUrl)
+    const buffer = Buffer.from(await res.arrayBuffer())
+    // 下载后才发现超阈值时同样改走 URL，避免 base64 撑爆 WebSocket 帧
+    if (enabled && buffer.length > threshold) return urlSeg
+    return { type: 'file', data: `${name}|${buffer.toString('base64')}` }
+  } catch (err) {
+    logger.debug(`[gs-plugin] 下载文件失败: ${err.message}`)
+    // 下载失败但允许 URL 时退回直接上报链接，避免整段文件丢失
+    return enabled ? urlSeg : null
+  }
 }
 
 function getGSUidForwardId (value) {
@@ -239,9 +363,12 @@ async function expandGSUidNode (result, node, e, depth, seen) {
   } else if (t === 'file') {
     const file = cleanGSUidUrl(leaf.url || leaf.file || leaf.data?.url || leaf.data?.file)
     if (file) result.push({ type: 'file', data: `file|${file}` })
-  } else if (t === 'record' || t === 'voice') {
-    const rec = cleanGSUidUrl(leaf.url || leaf.file || leaf.data?.url || leaf.data?.file)
-    if (rec) result.push({ type: 'record', data: stringifyGSUidId(rec) })
+  } else if (t === 'record' || t === 'voice' || t === 'audio') {
+    const rec = await resolveGSUidMedia(leaf)
+    if (rec) result.push({ type: 'record', data: rec })
+  } else if (t === 'video') {
+    const vid = await resolveGSUidMedia(leaf)
+    if (vid) result.push({ type: 'video', data: vid })
   }
 }
 
@@ -324,6 +451,22 @@ function formatNodePreview (items, quotedText = '') {
   return lines.filter(Boolean).join('\n')
 }
 
+/**
+ * 解析被引用消息的发送者昵称，供 AI 识别引用来源。
+ * 协议里 reply 段没有承载被引用者的字段，只能把昵称拼进正文。
+ * 群聊优先用群名片（card），其次昵称；都取不到时退回 QQ 号。
+ */
+function resolveQuotedSenderName (quoted, e) {
+  const sender = quoted?.sender || {}
+  const source = e?.source || {}
+  const sourceSender = source.sender || {}
+  const name = sender.card || sender.nickname || sender.name ||
+    sourceSender.card || sourceSender.nickname || sourceSender.name ||
+    source.nickname || source.name || ''
+  const uid = sender.user_id || sourceSender.user_id || source.user_id || ''
+  return { name: String(name || '').trim(), uid: uid === '' || uid == null ? '' : String(uid) }
+}
+
 /** 拉取被引用消息对象，兼容 getMsg / sendApi(get_msg) */
 async function fetchSourceMessage (e, id) {
   try {
@@ -348,11 +491,21 @@ async function fetchSourceMessage (e, id) {
 async function appendReply (message, replyId, quoted, e) {
   if (replyId != null && replyId !== '') message.push({ type: 'reply_id', data: String(replyId) })
 
+  // 被引用图片可能已由上层 message.js 注入，按归一化 URL 去重，避免同一张图前后各上报一次
+  const normImage = v => cleanGSUidUrl(String(v || '').trim())
+  const seenImages = new Set()
+  for (const seg of message) {
+    if (seg?.type === 'image' && seg.data) seenImages.add(normImage(seg.data))
+  }
+
   const quotedMsg = Array.isArray(quoted?.message) ? quoted.message : []
   for (const seg of quotedMsg) {
     if (seg?.type === 'image') {
       const img = seg.url || seg.file || seg.data?.url || seg.data?.file
-      if (img) message.push({ type: 'image', data: String(img).trim() })
+      if (img && !seenImages.has(normImage(img))) {
+        message.push({ type: 'image', data: normImage(img) })
+        seenImages.add(normImage(img))
+      }
     }
   }
 
@@ -367,7 +520,15 @@ async function appendReply (message, replyId, quoted, e) {
 
   const quotedText = getReplyText(quoted)
   const replyText = nodeItems.length ? formatNodePreview(nodeItems, quotedText) : quotedText
-  if (replyText) message.push({ type: 'reply', data: replyText })
+  // 把被引用者昵称拼进 reply 正文，让 AI 知道引用来源（协议无独立字段可承载）
+  const { name: quotedName, uid: quotedUid } = resolveQuotedSenderName(quoted, e)
+  const replyPrefix = (quotedName || quotedUid) ? `[回复 ${quotedName || quotedUid}]` : ''
+  if (replyText) {
+    message.push({ type: 'reply', data: replyPrefix ? `${replyPrefix} ${replyText}` : replyText })
+  } else if (replyPrefix) {
+    // 被引用内容为空（如纯图片消息）时，仅保留来源标注
+    message.push({ type: 'reply', data: replyPrefix })
+  }
   if (nodeItems.length) pushFlatOrNode(message, nodeItems)
 }
 
@@ -426,6 +587,17 @@ function sniffAudioExt (buffer) {
   if (head.startsWith('RIFF') && head.includes('WAVE')) return '.wav'
   if (head.includes('ftyp')) return '.m4a'
   return '.mp3'
+}
+
+/** 按魔数识别视频格式后缀，默认 mp4 */
+function sniffVideoExt (buffer) {
+  if (buffer.length < 12) return '.mp4'
+  const head = buffer.subarray(0, 12).toString('latin1')
+  if (head.startsWith('RIFF') && head.includes('AVI')) return '.avi'
+  if (buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3) return '.webm'
+  if (head.startsWith('FLV')) return '.flv'
+  if (head.startsWith('OggS')) return '.ogv'
+  return '.mp4'
 }
 
 /**
@@ -559,6 +731,22 @@ async function makeGSUidSendMsg (data, prevGachaMdList) {
           }
           break
         }
+        case 'video': {
+          const file = msg.data
+          // GSCore 视频段为 base64:// 或 http(s) 链接，base64 落盘为临时文件后交给后端发送
+          if (typeof file === 'string' && /^https?:\/\//.test(file)) {
+            sendMsg.push(segment.video(file))
+          } else {
+            const base64 = String(file).startsWith('base64://')
+              ? String(file).slice(9)
+              : String(file)
+            const buffer = Buffer.from(base64, 'base64')
+            const tmpPath = join(TMP_DIR, `${randomUUID()}${sniffVideoExt(buffer)}`)
+            fs.writeFileSync(tmpPath, buffer)
+            sendMsg.push(segment.video(tmpPath))
+          }
+          break
+        }
         case 'node': {
           const nodeSub = Array.isArray(msg.data) ? msg.data : [msg.data]
           // QQBot 下先把 node 内子段当普通 content 复用构建：若全部是兑换码则合并成一条 markdown 发送
@@ -683,5 +871,6 @@ function toGSButton (rawButtons) {
 
 export {
   makeGSUidReportMsg,
+  makeGSUidMetaReportMsg,
   makeGSUidSendMsg
 }

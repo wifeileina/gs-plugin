@@ -1,8 +1,9 @@
-import { makeGSUidReportMsg, makeGSUidSendMsg } from './makeMsg.js'
+import { makeGSUidReportMsg, makeGSUidMetaReportMsg, makeGSUidSendMsg } from './makeMsg.js'
 import { setLatestMsg, getLatestMsg, setMsg, getGroup_id, getUser_id } from './DataBase.js'
 
 export {
   makeGSUidReportMsg,
+  makeGSUidMetaReportMsg,
   makeGSUidSendMsg,
   setLatestMsg,
   getLatestMsg,

@@ -373,22 +373,34 @@ input[type="checkbox"]:checked::after {
 .toast.success { background: #0f7a56; }
 .toast.error { background: #b4232a; }
 
-/* ── 浮动保存 ── */
-.save-float {
+/* ── 浮动操作条 ── */
+.float-bar {
   position: fixed; left: 50%; bottom: 24px; z-index: 998;
   transform: translateX(-50%) translateY(12px);
-  display: inline-flex; align-items: center; gap: 8px;
-  height: 42px; padding: 0 22px; border: none; border-radius: 21px;
-  background: linear-gradient(180deg, var(--accent-3), var(--accent));
-  color: #fff;
-  font-size: 13.5px; font-weight: 600; font-family: inherit;
-  cursor: pointer; opacity: 0; pointer-events: none;
-  box-shadow: 0 12px 28px -10px rgba(37, 99, 235, .58), 0 2px 8px rgba(37, 99, 235, .18);
-  transition: opacity .2s, transform .2s, background .15s;
-  -webkit-tap-highlight-color: transparent;
+  display: flex; align-items: center; gap: 10px;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s, transform .2s;
 }
-.save-float.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
-.save-float:hover { background: linear-gradient(180deg, #4b8ef7, var(--accent-2)); }
+.float-bar.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+.float-btn {
+  height: 42px; padding: 0 22px; border: 1px solid transparent; border-radius: 21px;
+  font-size: 13.5px; font-weight: 600; font-family: inherit;
+  display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: background .15s, border-color .15s, color .15s, box-shadow .15s;
+}
+.float-btn:active { transform: translateY(1px); }
+.float-save {
+  background: linear-gradient(180deg, var(--accent-3), var(--accent));
+  border-color: var(--accent-2); color: #fff;
+  box-shadow: 0 12px 28px -10px rgba(37, 99, 235, .58), 0 2px 8px rgba(37, 99, 235, .18);
+}
+.float-save:hover { background: linear-gradient(180deg, #4b8ef7, var(--accent-2)); }
+.float-cancel {
+  background: var(--surface); border-color: var(--line-2); color: var(--danger);
+  box-shadow: var(--shadow-sm);
+}
+.float-cancel:hover { background: var(--danger-soft); border-color: #f5c2c0; color: var(--danger); }
 
 /* ── 滚动条 ── */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -441,8 +453,9 @@ input[type="checkbox"]:checked::after {
   .btn { height: 38px; }
   .btn-xs { height: 30px; }
 
-  .save-float { left: 16px; right: 16px; transform: translateY(12px); justify-content: center; }
-  .save-float.show { transform: translateY(0); }
+  .float-bar { left: 16px; right: 16px; transform: translateY(12px); }
+  .float-bar.show { transform: translateY(0); }
+  .float-btn { flex: 1; padding: 0 16px; }
   .toast { top: auto; bottom: 82px; left: 16px; right: 16px; transform: translateY(8px); text-align: center; }
   .toast.show { transform: translateY(0); }
 }
@@ -620,6 +633,10 @@ input[type="checkbox"]:checked::after {
         </div>
         <div class="field"><label>忽略仅艾特</label><div class="ctl"><div class="toggle" id="ignoreOnlyReplyAt" onclick="toggle(this)"></div></div></div>
         <div class="field"><label>临时会话</label><div class="ctl"><div class="toggle" id="tempMsgReport" onclick="toggle(this)"></div></div></div>
+        <div class="field">
+          <label>戳一戳上报</label>
+          <div class="ctl"><div class="toggle" id="pokeReport" onclick="toggle(this)"></div><span class="hint">上报为 GS meta 事件</span></div>
+        </div>
       </div>
     </div>
 
@@ -637,6 +654,25 @@ input[type="checkbox"]:checked::after {
         <div class="field">
           <label>仅上报文字</label>
           <div class="ctl"><div class="toggle" id="mergeForwardTextOnly" onclick="toggle(this)"></div><span class="hint">合并转发只上报文字内容</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head"><h2>文件传输</h2></div>
+      <div class="group-note">文件消息上报 GS 时可用链接代替 base64，避免大文件撑爆 WebSocket 帧。</div>
+      <div class="rows">
+        <div class="field">
+          <label>URL 开关</label>
+          <div class="ctl"><div class="toggle" id="fileUrlEnabled" onclick="toggle(this)"></div><span class="hint">关闭后一律内嵌 base64</span></div>
+        </div>
+        <div class="field">
+          <label>全量 URL</label>
+          <div class="ctl"><div class="toggle" id="fileUrlAlways" onclick="toggle(this)"></div><span class="hint">所有文件都直接上报链接</span></div>
+        </div>
+        <div class="field">
+          <label>URL 阈值</label>
+          <div class="ctl"><input type="number" id="fileUrlThreshold" min="0" onchange="computeDirty()"><span class="hint">MB，超过则改用链接</span></div>
         </div>
       </div>
     </div>
@@ -662,16 +698,20 @@ input[type="checkbox"]:checked::after {
 </main>
 
 <div class="toast" id="toast"></div>
-<button class="save-float" id="saveFloat" onclick="saveConfig()">保存配置</button>
+<div class="float-bar" id="floatBar">
+  <button class="float-btn float-cancel" onclick="cancelConfig()">取消</button>
+  <button class="float-btn float-save" onclick="saveConfig()">保存配置</button>
+</div>
 
 <script>
 const WEB_BASE = new URLSearchParams(location.search).get('__webBase') || ''
 const API = (path) => `${WEB_BASE}/api${path}`
-let configData = {}, botList = [], originalBody = null
+let configData = {}, botList = [], originalBody = null, originalData = null
 
 // 构建当前配置主体（用于保存和对比）—— 深拷贝避免引用共享
 function buildConfigBody() {
   const messageBuild = ensureMessageBuild()
+  const fileUrlThreshold = Number(document.getElementById('fileUrlThreshold').value)
   return {
     pluginEnabled: isOn('pluginEnabled'),
     servers: buildServers(),
@@ -685,6 +725,10 @@ function buildConfigBody() {
     mergeForwardFlatten: isOn('mergeForwardFlatten'), mergeForwardTextOnly: isOn('mergeForwardTextOnly'),
     ignoreOnlyReplyAt: isOn('ignoreOnlyReplyAt'),
     tempMsgReport: isOn('tempMsgReport'),
+    pokeReport: isOn('pokeReport'),
+    fileUrlEnabled: isOn('fileUrlEnabled'),
+    fileUrlAlways: isOn('fileUrlAlways'),
+    fileUrlThreshold: Number.isFinite(fileUrlThreshold) && fileUrlThreshold >= 0 ? fileUrlThreshold : 15,
     messageBuild: {
       legacyReply: {
         enabled: isOn('legacyReplyEnabled'),
@@ -750,12 +794,26 @@ function isOn(elId) { return document.getElementById(elId).classList.contains('o
 function computeDirty() {
   const current = buildConfigBody()
   const dirty = JSON.stringify(current) !== JSON.stringify(originalBody)
-  const el = document.getElementById('saveFloat')
+  const el = document.getElementById('floatBar')
   if (dirty) el.classList.add('show'); else el.classList.remove('show')
 }
-function clearDirty() {
+function snapshotOrigin() {
   originalBody = buildConfigBody()
-  document.getElementById('saveFloat').classList.remove('show')
+  originalData = JSON.parse(JSON.stringify(configData))
+}
+function clearDirty() {
+  snapshotOrigin()
+  document.getElementById('floatBar').classList.remove('show')
+}
+
+// 放弃本次改动，还原到上次加载/保存时的配置
+function cancelConfig() {
+  if (!originalData) return
+  configData = JSON.parse(JSON.stringify(originalData))
+  renderAll()
+  snapshotOrigin()
+  document.getElementById('floatBar').classList.remove('show')
+  showToast('已还原修改', 'success')
 }
 
 async function loadConfig() {
@@ -772,7 +830,7 @@ async function loadConfig() {
       groupList = grpJson.data || []
     }
     renderAll()
-    originalBody = buildConfigBody()
+    snapshotOrigin()
   } catch(e) { showToast('加载失败: ' + e.message, 'error') }
 }
 
@@ -797,6 +855,10 @@ function renderAll() {
   setToggle('mergeForwardTextOnly', d.mergeForwardTextOnly !== false)
   setToggle('ignoreOnlyReplyAt', d.ignoreOnlyReplyAt)
   setToggle('tempMsgReport', d.tempMsgReport)
+  setToggle('pokeReport', d.pokeReport !== false)
+  setToggle('fileUrlEnabled', d.fileUrlEnabled === true)
+  setToggle('fileUrlAlways', d.fileUrlAlways === true)
+  document.getElementById('fileUrlThreshold').value = d.fileUrlThreshold ?? 15
   const messageBuild = ensureMessageBuild()
   setToggle('legacyReplyEnabled', messageBuild.legacyReply.enabled)
   setToggle('forceActiveEnabled', messageBuild.forceActiveMessage.enabled)
@@ -1075,6 +1137,7 @@ function renderTagListIn(el, items, onChange) {
     if (!input || !input.value.trim()) return
     const newArr = [...items, input.value.trim()]
     onChange(newArr); renderTagListIn(el, newArr, onChange)
+    el.querySelector('.tag-add-input')?.focus()
   }
   const removeFn = (idx) => {
     const newArr = items.filter((_, i) => i !== idx)
@@ -1092,7 +1155,11 @@ function renderTagListIn(el, items, onChange) {
   el.querySelectorAll('.rm').forEach(node => { node.onclick = () => removeFn(Number(node.dataset.idx)) })
   const btn = wrap.querySelector('button'), inp = wrap.querySelector('input')
   btn.onclick = addFn
-  inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addFn() } }
+  inp.onkeydown = (e) => {
+    // 中文/日文等输入法组合中的回车用于上屏，放行以免吞掉候选词
+    if (e.isComposing || e.keyCode === 229) return
+    if (e.key === 'Enter') { e.preventDefault(); addFn() }
+  }
 }
 function renderTagList(id, items, onChange) { renderTagListIn(document.getElementById(id), items, onChange) }
 
