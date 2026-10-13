@@ -206,9 +206,11 @@ function cleanGSUidUrl (v) {
 const MEDIA_FETCH_TIMEOUT = 10000
 
 /**
- * 把 record/video 段转成 gs 要求的 base64:// 形式。
- * 协议端常只给本地路径（file:// 或绝对路径），此时直接读盘；否则按 http(s) 下载。
- * 两者都失败时，若是 http(s) 链接则原样返回交给 core 自行拉取，否则放弃该段。
+ * 把 record/video 段转成上报值。
+ * 协议端常只给本地路径（file:// 或绝对路径），此时直接读盘转 base64；否则按 http(s) 下载转 base64。
+ * fileUrlEnabled 开启时，带 http(s) 直链的音视频与文件同策略：全量或超阈值时直接上报链接，
+ * 由 core 端 RM 惰性拉取，避免大媒体 base64 撑爆 WebSocket 帧。
+ * 下载失败时，若是 http(s) 链接则原样返回交给 core 自行拉取，否则放弃该段。
  */
 async function resolveGSUidMedia (seg) {
   const raw = seg?.url || seg?.file || seg?.data?.url || seg?.data?.file || ''
@@ -230,11 +232,20 @@ async function resolveGSUidMedia (seg) {
   }
 
   if (/^https?:/i.test(value)) {
+    const urlMode = Config.fileUrlEnabled
+    const threshold = Config.fileUrlThreshold * 1024 * 1024
+    if (urlMode && Config.fileUrlAlways) return value
+    if (urlMode) {
+      const size = await probeGSUidFileSize(value)
+      if (size > 0 && size > threshold) return value
+    }
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), MEDIA_FETCH_TIMEOUT)
     try {
       const res = await fetch(value, { signal: controller.signal })
       const buffer = Buffer.from(await res.arrayBuffer())
+      // 下载后才发现超阈值时同样改走 URL，避免 base64 撑爆 WebSocket 帧
+      if (urlMode && buffer.length > threshold) return value
       return `base64://${buffer.toString('base64')}`
     } catch (err) {
       logger.debug(`[gs-plugin] 下载媒体失败: ${err.message}`)
@@ -248,7 +259,7 @@ async function resolveGSUidMedia (seg) {
 
 const FILE_URL_HEAD_TIMEOUT = 8000
 
-/** 探测远端文件体积；不支持 HEAD 或无 content-length 时返回 0 */
+/** 探测远端资源体积；不支持 HEAD 或无 content-length 时返回 0 */
 async function probeGSUidFileSize (url) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FILE_URL_HEAD_TIMEOUT)
@@ -419,38 +430,6 @@ function getReplyText (reply) {
   return ''
 }
 
-/** 把合并转发展开结果转成可读文字摘要（图片/语音等用占位），供 AI 读引用内容 */
-function formatNodePreview (items, quotedText = '') {
-  const lines = [NODE_MARK]
-  if (quotedText && !quotedText.includes(NODE_MARK)) lines.push(quotedText)
-  let pendingNickname = ''
-  for (const item of items) {
-    if (item.type === 'text' && item.data) {
-      const text = String(item.data).trim()
-      if (text.endsWith(':') || text.endsWith('：')) {
-        pendingNickname = `${text.slice(0, -1)}：`
-        continue
-      }
-      lines.push(`${pendingNickname}${text}`)
-      pendingNickname = ''
-    } else if (item.type === 'image') {
-      lines.push(`${pendingNickname}[图片]`)
-      pendingNickname = ''
-    } else if (item.type === 'record' || item.type === 'voice') {
-      lines.push(`${pendingNickname}[语音]`)
-      pendingNickname = ''
-    } else if (item.type === 'video') {
-      lines.push(`${pendingNickname}[视频]`)
-      pendingNickname = ''
-    } else if (item.type === 'file') {
-      lines.push(`${pendingNickname}[文件]`)
-      pendingNickname = ''
-    }
-  }
-  if (pendingNickname) lines.push(pendingNickname)
-  return lines.filter(Boolean).join('\n')
-}
-
 /**
  * 解析被引用消息的发送者昵称，供 AI 识别引用来源。
  * 协议里 reply 段没有承载被引用者的字段，只能把昵称拼进正文。
@@ -499,12 +478,43 @@ async function appendReply (message, replyId, quoted, e) {
   }
 
   const quotedMsg = Array.isArray(quoted?.message) ? quoted.message : []
+  // 被引用媒体的两种上报方式：
+  //  - 原方法（默认）：作为独立媒体段上报，视频/语音/文件能正常显示；
+  //  - 实验性功能（Config.experimental）：改写为引用正文里的直链，不产生 vid_ 句柄
+  //    （避免模型误用 read_handle 报「句柄不存在」），并让 read_video 直读 http(s) 链接。
+  const useLinkMode = Config.experimental === true
+  const mediaLines = []
   for (const seg of quotedMsg) {
-    if (seg?.type === 'image') {
+    const type = seg?.type
+    const mediaUrl = cleanGSUidUrl(seg.url || seg.file || seg.data?.url || seg.data?.file || '')
+    if (type === 'image') {
       const img = seg.url || seg.file || seg.data?.url || seg.data?.file
       if (img && !seenImages.has(normImage(img))) {
         message.push({ type: 'image', data: normImage(img) })
         seenImages.add(normImage(img))
+      }
+    } else if (type === 'record' || type === 'voice' || type === 'audio') {
+      if (useLinkMode) {
+        if (mediaUrl) mediaLines.push(`音频链接: ${mediaUrl}`)
+      } else {
+        const media = await resolveGSUidMedia(seg)
+        if (media) message.push({ type: 'record', data: media })
+      }
+    } else if (type === 'video') {
+      if (useLinkMode) {
+        // 「视频ID:」前缀让 core 暴露 read_video，且 read_video 支持 http(s) 直链
+        if (mediaUrl) mediaLines.push(`视频ID: ${mediaUrl}`)
+      } else {
+        const media = await resolveGSUidMedia(seg)
+        if (media) message.push({ type: 'video', data: media })
+      }
+    } else if (type === 'file') {
+      const fileName = seg.name || seg.data?.name || seg.filename || 'file'
+      if (useLinkMode) {
+        if (mediaUrl) mediaLines.push(`文件链接: ${fileName} ${mediaUrl}`)
+      } else if (mediaUrl) {
+        const fileSeg = await buildGSUidFileSeg(mediaUrl, fileName)
+        if (fileSeg) message.push(fileSeg)
       }
     }
   }
@@ -519,15 +529,30 @@ async function appendReply (message, replyId, quoted, e) {
   }
 
   const quotedText = getReplyText(quoted)
-  const replyText = nodeItems.length ? formatNodePreview(nodeItems, quotedText) : quotedText
-  // 把被引用者昵称拼进 reply 正文，让 AI 知道引用来源（协议无独立字段可承载）
+  // 引用正文只上报被引用消息原文：core 侧会自行加 "--- 引用消息 ---" 标题，
+  // 并用原文匹配出「引用对象」；合并转发预览同样交给 core（由 event.node 生成），
+  // 不再拼进引用正文，避免破坏 core 的原文匹配。
+  // 实验性模式下媒体直链并入引用正文；默认模式 mediaLines 为空。
+  const replyText = mediaLines.length ? [quotedText, ...mediaLines].filter(Boolean).join('\n') : quotedText
   const { name: quotedName, uid: quotedUid } = resolveQuotedSenderName(quoted, e)
-  const replyPrefix = (quotedName || quotedUid) ? `[回复 ${quotedName || quotedUid}]` : ''
+  const selfId = String(e?.self_id ?? '')
+  const isSelfQuote = !!selfId && !!quotedUid && String(quotedUid) === selfId
+  const isOtherQuote = !!quotedUid && String(quotedUid) !== selfId
+  // 引用 bot 自己的消息：补一个 at(bot) 段让 core 置 is_tome（该段不进正文/at_list，
+  // 对用户不可见），配合 has_reply 触发 core 的 quoted_tome（"引用了你的上一条"）语义。
+  if (isSelfQuote) message.push({ type: 'at', data: selfId })
+  // 引用别人的消息：core 的引用消解（OutboundAudit）本来就查不到，加 [引用 昵称] 前缀
+  // 不损失匹配、还能让 AI 知道来源；引用自己的消息保持纯原文，交给 core 消解。
+  // 实验性2（默认关闭）：强制对所有引用都加昵称前缀（会破坏 core 的原文匹配）。
+  let replyPrefix = ''
+  if (Config.experimental2 === true || isOtherQuote) {
+    if (quotedName || quotedUid) replyPrefix = `[引用 ${quotedName || quotedUid}] `
+  }
   if (replyText) {
-    message.push({ type: 'reply', data: replyPrefix ? `${replyPrefix} ${replyText}` : replyText })
+    message.push({ type: 'reply', data: `${replyPrefix}${replyText}` })
   } else if (replyPrefix) {
     // 被引用内容为空（如纯图片消息）时，仅保留来源标注
-    message.push({ type: 'reply', data: replyPrefix })
+    message.push({ type: 'reply', data: replyPrefix.trim() })
   }
   if (nodeItems.length) pushFlatOrNode(message, nodeItems)
 }

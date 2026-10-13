@@ -52,6 +52,8 @@ export function init(ctx) {
           fileUrlEnabled: cfg.fileUrlEnabled === true,
           fileUrlAlways: cfg.fileUrlAlways === true,
           fileUrlThreshold: cfg.fileUrlThreshold ?? 15,
+          experimental: cfg.experimental === true,
+          experimental2: cfg.experimental2 === true,
           // 保留 legacyReply 字段供旧 Web 前端读取；新前端统一使用 messageBuild。
           legacyReply: Config.messageBuild.legacyReply,
           messageBuild: Config.messageBuild,
@@ -79,6 +81,8 @@ export function init(ctx) {
         'noMsgStart', 'noMsgInclude', 'noGroup', 'yesGroup',
         'muteStop', 'shutdownStop', 'ignoreOnlyReplyAt', 'tempMsgReport', 'pokeReport', 'legacyReply', 'messageBuild',
         'fileUrlEnabled', 'fileUrlAlways', 'fileUrlThreshold',
+        'experimental',
+        'experimental2',
         'mergeForward', 'mergeForwardFlatten', 'mergeForwardTextOnly',
         'disconnectToMaster', 'reconnectToMaster', 'firstconnectToMaster',
         'msgStoreTime', 'taskQueue', 'heartbeatInterval', 'gsuidBotPrefix', 'gsuidPrefixIgnore'

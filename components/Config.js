@@ -163,6 +163,14 @@ class Config {
     return Number.isFinite(value) && value >= 0 ? value : 15
   }
 
+  get experimental () {
+    return this.getDefOrConfig('gs-config').experimental === true
+  }
+
+  get experimental2 () {
+    return this.getDefOrConfig('gs-config').experimental2 === true
+  }
+
   get legacyReply () {
     return this.messageBuild.legacyReply
   }

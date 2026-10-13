@@ -467,24 +467,24 @@ export function supportGuoba() {
         },
         {
           component: 'Divider',
-          label: '文件传输'
+          label: '文件/媒体传输'
         },
         {
           field: 'gs.fileUrlEnabled',
           label: 'URL 开关',
-          bottomHelpMessage: '文件上报 GS 时可用链接代替 base64；关闭后一律内嵌 base64',
+          bottomHelpMessage: '文件、音频、视频上报 GS 时可用链接代替 base64；关闭后一律内嵌 base64',
           component: 'Switch',
         },
         {
           field: 'gs.fileUrlAlways',
           label: '全量 URL',
-          bottomHelpMessage: '开启后所有文件都直接上报链接（忽略阈值）',
+          bottomHelpMessage: '开启后所有文件/音频/视频都直接上报链接（忽略阈值）',
           component: 'Switch',
         },
         {
           field: 'gs.fileUrlThreshold',
           label: 'URL 阈值',
-          bottomHelpMessage: '文件超过该大小时自动改用链接上报，避免 base64 撑爆 WebSocket 帧',
+          bottomHelpMessage: '文件/音频/视频超过该大小时自动改用链接上报，避免 base64 撑爆 WebSocket 帧',
           component: 'InputNumber',
           required: true,
           componentProps: {
@@ -492,6 +492,18 @@ export function supportGuoba() {
             placeholder: '15',
             addonAfter: 'MB'
           },
+        },
+        {
+          field: 'gs.experimental',
+          label: '实验性功能',
+          bottomHelpMessage: '开启后被引用的视频/语音/文件改写为正文直链（不再作为媒体段上报）；默认关闭',
+          component: 'Switch',
+        },
+        {
+          field: 'gs.experimental2',
+          label: '实验性2',
+          bottomHelpMessage: '默认按来源分流：引用自己的消息用原文、别人的加 [引用 昵称]；开启后强制所有引用都加前缀（会破坏 core 的引用对象匹配）；默认关闭',
+          component: 'Switch',
         },
         {
           field: 'gs.msgStoreTime',
@@ -547,6 +559,9 @@ export function supportGuoba() {
         if (gs.fileUrlEnabled === undefined) gs.fileUrlEnabled = false
         if (gs.fileUrlAlways === undefined) gs.fileUrlAlways = false
         if (gs.fileUrlThreshold === undefined) gs.fileUrlThreshold = 15
+        // 确保实验性功能开关有默认值
+        if (gs.experimental === undefined) gs.experimental = false
+        if (gs.experimental2 === undefined) gs.experimental2 = false
         const messageBuild = Config.messageBuild
         gs.messageBuildLegacyReplyEnabled = messageBuild.legacyReply.enabled
         gs.messageBuildLegacyReplyGroups = messageBuild.legacyReply.groups

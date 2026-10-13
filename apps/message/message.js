@@ -5,12 +5,15 @@ import _ from 'lodash'
 import cfg from '../../../../lib/config/config.js'
 import PluginsLoader from '../../../../lib/plugins/loader.js'
 
-// 取消息开头的“有效指令文本”：跳过前置的@提及（at 段 / CQ 码 / 纯文本@）及其后的空格
+// 取消息开头的“有效指令文本”：跳过前置的@提及、引用段（at 段 / CQ 码 / 纯文本@ / reply 段）
 function getLeadingCleanText (message) {
   const segs = Array.isArray(message) ? message : []
   let text = ''
   for (const seg of segs) {
     if (!seg) continue
+    // 引用段（reply/reply_id）不是正文：回复消息时 e.message 常以它开头，
+    // 若在此 break 会让「不转发前缀 / 群拦截」整体失效（消息照常上报）
+    if (seg.type === 'reply' || seg.type === 'reply_id') continue
     if (seg.type === 'at') continue
     if (seg.type !== 'text') break
     text += seg.text || ''
