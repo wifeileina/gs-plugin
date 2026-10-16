@@ -58,19 +58,19 @@ async function makeGSUidReportMsg (e, botId = 'onebot') {
         })
         break
       case 'file': {
-        let fileUrl, name
-        // 私聊文件（非 TRSS）：通过 friend.getFileUrl 获取下载链接
-        if (!e.isGroup && !Version.isTrss && e.friend?.getFileUrl) {
-          fileUrl = await e.friend.getFileUrl(e.file.fid)
-          name = i.name
-        } else {
-          // 群聊文件 / TRSS 私聊文件：从消息段中获取 URL
-          fileUrl = cleanGSUidUrl(i.url || i.file || i.data?.url)
-          name = i.name || i.data?.name || i.filename || 'file'
-        }
+        // TRSS 适配器会把段扁平化为 { type:'file', ...data }：文件名在 file，下载 id 在 file_id
+        const rawFile = typeof i.file === 'string' ? i.file : i.data?.file
+        const fileId = i.file_id || i.fid || i.data?.file_id || i.data?.fid || e.file?.file_id || e.file?.fid || ''
+        const name = i.name || i.file_name || i.data?.name || (rawFile && !/^https?:/i.test(rawFile) ? rawFile : '') || 'file'
+        // 段里自带直链时直接用；否则（多数协议端只给 file_id）向协议端换取下载链接
+        let fileUrl = cleanGSUidUrl(i.url || i.data?.url || '')
+        if (!fileUrl && rawFile && /^https?:/i.test(rawFile)) fileUrl = cleanGSUidUrl(rawFile)
+        if (!fileUrl && fileId) fileUrl = await resolveGSUidFileUrl(e, fileId)
         if (fileUrl) {
           const seg = await buildGSUidFileSeg(fileUrl, name)
           if (seg) message.push(seg)
+        } else {
+          logger.debug(`[gs-plugin] 文件段缺少可用下载链接，已跳过: name=${name}, file_id=${fileId || '无'}`)
         }
         break
       }
@@ -272,6 +272,44 @@ async function probeGSUidFileSize (url) {
   } finally {
     clearTimeout(timer)
   }
+}
+
+/**
+ * 向协议端换取文件下载链接。
+ * OneBot 收到的文件段通常只带 file_id、不带 url，需按会话类型索取：
+ *  - 私聊：get_private_file_url（TRSS 适配器封装为 e.friend.getFileUrl(file_id)）
+ *  - 群聊：get_group_file_url（TRSS 适配器封装为 e.group.fs.download(file_id, busid)）
+ * 各实现返回结构不一，统一取 url / data.url / data(字符串)。
+ */
+async function resolveGSUidFileUrl (e, fileId) {
+  if (!fileId) return ''
+  const pickUrl = res => {
+    if (!res) return ''
+    if (typeof res === 'string') return /^https?:/i.test(res) ? res : ''
+    return res.url || res.data?.url || (typeof res.data === 'string' ? res.data : '') || ''
+  }
+  try {
+    if (e.isGroup) {
+      if (typeof e.group?.fs?.download === 'function') {
+        const url = pickUrl(await e.group.fs.download(fileId, e.file?.busid))
+        if (url) return url
+      }
+    } else if (typeof e.friend?.getFileUrl === 'function') {
+      const url = pickUrl(await e.friend.getFileUrl(fileId))
+      if (url) return url
+    }
+    const bot = e.bot || Bot[e.self_id] || Bot
+    if (typeof bot?.sendApi === 'function') {
+      const res = e.isGroup
+        ? await bot.sendApi('get_group_file_url', { group_id: e.group_id, file_id: fileId, busid: e.file?.busid })
+        : await bot.sendApi('get_private_file_url', { user_id: e.user_id, file_id: fileId })
+      const url = pickUrl(res)
+      if (url) return url
+    }
+  } catch (err) {
+    logger.debug(`[gs-plugin] 换取文件下载链接失败: ${err.message}`)
+  }
+  return ''
 }
 
 /**
