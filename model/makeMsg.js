@@ -516,10 +516,12 @@ async function appendReply (message, replyId, quoted, e) {
   }
 
   const quotedMsg = Array.isArray(quoted?.message) ? quoted.message : []
-  // 被引用媒体的两种上报方式：
-  //  - 原方法（默认）：作为独立媒体段上报，视频/语音/文件能正常显示；
-  //  - 实验性功能（Config.experimental）：改写为引用正文里的直链，不产生 vid_ 句柄
-  //    （避免模型误用 read_handle 报「句柄不存在」），并让 read_video 直读 http(s) 链接。
+  // 被引用媒体的上报方式：
+  //  - 默认：作为独立媒体段上报，视频/语音/文件能正常显示；
+  //  - 实验性功能（Config.experimental）：语音/文件改写为引用正文里的直链，不产生对应句柄
+  //    （避免模型误用 read_handle 报「句柄不存在」）。
+  //  视频例外：始终作为独立 video 段上报，让 core 生成真实 vid_ 句柄，read_video 才真正读得到；
+  //  实验性模式下只在引用正文补一句文字提示（原先伪造 core 的「视频ID:」标签并不产生句柄）。
   const useLinkMode = Config.experimental === true
   const mediaLines = []
   for (const seg of quotedMsg) {
@@ -539,13 +541,10 @@ async function appendReply (message, replyId, quoted, e) {
         if (media) message.push({ type: 'record', data: media })
       }
     } else if (type === 'video') {
-      if (useLinkMode) {
-        // 「视频ID:」前缀让 core 暴露 read_video，且 read_video 支持 http(s) 直链
-        if (mediaUrl) mediaLines.push(`视频ID: ${mediaUrl}`)
-      } else {
-        const media = await resolveGSUidMedia(seg)
-        if (media) message.push({ type: 'video', data: media })
-      }
+      // 始终上报独立 video 段：core 据此生成 vid_ 句柄，read_video 才有内容可读
+      const media = await resolveGSUidMedia(seg)
+      if (media) message.push({ type: 'video', data: media })
+      if (useLinkMode && (media || mediaUrl)) mediaLines.push('[引用含视频]')
     } else if (type === 'file') {
       const fileName = seg.name || seg.data?.name || seg.filename || 'file'
       if (useLinkMode) {
