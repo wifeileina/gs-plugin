@@ -660,7 +660,7 @@ input[type="checkbox"]:checked::after {
 
     <div class="group">
       <div class="group-head"><h2>文件/媒体传输</h2></div>
-      <div class="group-note">文件、音频、视频上报 GS 时可用链接代替 base64，避免大媒体撑爆 WebSocket 帧。</div>
+      <div class="group-note">文件、音频上报 GS 时可用链接代替 base64，避免大媒体撑爆 WebSocket 帧。</div>
       <div class="rows">
         <div class="field">
           <label>URL 开关</label>
@@ -668,11 +668,15 @@ input[type="checkbox"]:checked::after {
         </div>
         <div class="field">
           <label>全量 URL</label>
-          <div class="ctl"><div class="toggle" id="fileUrlAlways" onclick="toggle(this)"></div><span class="hint">所有文件/音视频都直接上报链接</span></div>
+          <div class="ctl"><div class="toggle" id="fileUrlAlways" onclick="toggle(this)"></div><span class="hint">所有文件/音频都直接上报链接</span></div>
         </div>
         <div class="field">
           <label>URL 阈值</label>
           <div class="ctl"><input type="number" id="fileUrlThreshold" min="0" onchange="computeDirty()"><span class="hint">MB，超过则改用链接</span></div>
+        </div>
+        <div class="field">
+          <label>视频直链上报</label>
+          <div class="ctl"><div class="toggle" id="videoUrlEnabled" onclick="toggle(this)"></div><span class="hint">视频有直链时直接上报链接，由 GS 侧下载或透传；关闭后下载内嵌 base64</span></div>
         </div>
       </div>
     </div>
@@ -744,6 +748,7 @@ function buildConfigBody() {
     fileUrlEnabled: isOn('fileUrlEnabled'),
     fileUrlAlways: isOn('fileUrlAlways'),
     fileUrlThreshold: Number.isFinite(fileUrlThreshold) && fileUrlThreshold >= 0 ? fileUrlThreshold : 15,
+    videoUrlEnabled: isOn('videoUrlEnabled'),
     experimental: isOn('experimental'),
     experimental2: isOn('experimental2'),
     messageBuild: {
@@ -876,6 +881,7 @@ function renderAll() {
   setToggle('fileUrlEnabled', d.fileUrlEnabled === true)
   setToggle('fileUrlAlways', d.fileUrlAlways === true)
   document.getElementById('fileUrlThreshold').value = d.fileUrlThreshold ?? 15
+  setToggle('videoUrlEnabled', d.videoUrlEnabled !== false)
   setToggle('experimental', d.experimental === true)
   setToggle('experimental2', d.experimental2 === true)
   const messageBuild = ensureMessageBuild()

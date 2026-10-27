@@ -83,7 +83,8 @@ async function makeGSUidReportMsg (e, botId = 'onebot') {
         break
       }
       case 'video': {
-        const media = await resolveGSUidMedia(i)
+        // 优先上报直链：core 据此生成 vid_ 句柄，并按 provider 配置直接投喂多模态模型
+        const media = await resolveGSUidVideo(i)
         if (media) message.push({ type: 'video', data: media })
         break
       }
@@ -257,6 +258,28 @@ async function resolveGSUidMedia (seg) {
   return ''
 }
 
+/** 取视频段里可直接外发的 http(s) 直链；拿到本地路径或无直链时返回 '' */
+function pickGSUidVideoUrl (seg) {
+  const raw = seg?.url || seg?.file || seg?.data?.url || seg?.data?.file || ''
+  const value = cleanGSUidUrl(String(raw || '').trim())
+  return /^https?:/i.test(value) ? value : ''
+}
+
+/**
+ * 视频段转上报值。
+ * core 已支持把视频直接交给多模态模型（provider 侧 video_url / 视频内联体积配置），
+ * 因此优先上报 http(s) 直链：由 core 侧自行下载或按配置透传，既免去插件下载后 base64
+ * 撑爆 WebSocket 帧，也绕开 core 的视频内联体积上限（超限会降级为抽帧）。
+ * videoUrlEnabled 关闭、或段里只有本地路径（core 不可达）时，回退原有逻辑内嵌 base64。
+ */
+async function resolveGSUidVideo (seg) {
+  if (Config.videoUrlEnabled) {
+    const url = pickGSUidVideoUrl(seg)
+    if (url) return url
+  }
+  return await resolveGSUidMedia(seg)
+}
+
 const FILE_URL_HEAD_TIMEOUT = 8000
 
 /** 探测远端资源体积；不支持 HEAD 或无 content-length 时返回 0 */
@@ -416,7 +439,7 @@ async function expandGSUidNode (result, node, e, depth, seen) {
     const rec = await resolveGSUidMedia(leaf)
     if (rec) result.push({ type: 'record', data: rec })
   } else if (t === 'video') {
-    const vid = await resolveGSUidMedia(leaf)
+    const vid = await resolveGSUidVideo(leaf)
     if (vid) result.push({ type: 'video', data: vid })
   }
 }
@@ -541,8 +564,9 @@ async function appendReply (message, replyId, quoted, e) {
         if (media) message.push({ type: 'record', data: media })
       }
     } else if (type === 'video') {
-      // 始终上报独立 video 段：core 据此生成 vid_ 句柄，read_video 才有内容可读
-      const media = await resolveGSUidMedia(seg)
+      // 始终上报独立 video 段：core 据此生成 vid_ 句柄，才能把视频交给多模态模型；
+      // 有直链时优先报直链，由 core 侧下载或透传
+      const media = await resolveGSUidVideo(seg)
       if (media) message.push({ type: 'video', data: media })
       if (useLinkMode && (media || mediaUrl)) mediaLines.push('[引用含视频]')
     } else if (type === 'file') {

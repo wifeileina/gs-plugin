@@ -163,6 +163,10 @@ class Config {
     return Number.isFinite(value) && value >= 0 ? value : 15
   }
 
+  get videoUrlEnabled () {
+    return this.getDefOrConfig('gs-config').videoUrlEnabled !== false
+  }
+
   get experimental () {
     return this.getDefOrConfig('gs-config').experimental === true
   }

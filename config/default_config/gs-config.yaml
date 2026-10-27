@@ -77,13 +77,18 @@ tempMsgReport: false
 # 戳一戳是否上报
 # 上报为 GS meta 事件（meta-poke），需 GS 侧插件用 on_meta("poke") 接收
 pokeReport: true
-# URL传输：文件/音频/视频上报 GS 时，用链接代替 base64，避免大媒体撑爆 WebSocket 帧
+# URL传输：文件/音频上报 GS 时，用链接代替 base64，避免大媒体撑爆 WebSocket 帧
 # fileUrlEnabled: URL 总开关，默认关闭；关闭后一律内嵌 base64（图片始终走链接，不受此开关影响）
-# fileUrlAlways: 全量URL，开启后所有文件/音频/视频都直接上报链接（忽略阈值）
-# fileUrlThreshold: URL阈值(MB)，文件/音频/视频超过该大小时自动改用链接上报
+# fileUrlAlways: 全量URL，开启后所有文件/音频都直接上报链接（忽略阈值）
+# fileUrlThreshold: URL阈值(MB)，文件/音频超过该大小时自动改用链接上报
 fileUrlEnabled: false
 fileUrlAlways: false
 fileUrlThreshold: 15
+# 视频直链上报：默认开启
+# 视频段有 http(s) 直链时直接上报链接（不看上面三个开关），由 core 侧下载或按 provider 的
+# video_url / video_url_passthrough 配置投喂模型；关闭后回退为插件下载内嵌 base64。
+# 本地路径视频无处可下载，两种模式下都会读盘转 base64。
+videoUrlEnabled: true
 # 实验性功能：默认关闭
 # 开启后被引用的视频/语音/文件改写为引用正文里的直链（不再作为媒体段上报），
 # 避免 core 生成 vid_ 句柄；关闭时保持原方法（作为独立媒体段上报）

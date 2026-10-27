@@ -52,6 +52,7 @@ export function init(ctx) {
           fileUrlEnabled: cfg.fileUrlEnabled === true,
           fileUrlAlways: cfg.fileUrlAlways === true,
           fileUrlThreshold: cfg.fileUrlThreshold ?? 15,
+          videoUrlEnabled: cfg.videoUrlEnabled !== false,
           experimental: cfg.experimental === true,
           experimental2: cfg.experimental2 === true,
           // 保留 legacyReply 字段供旧 Web 前端读取；新前端统一使用 messageBuild。
@@ -80,7 +81,7 @@ export function init(ctx) {
         'pluginEnabled', 'enabledBots', 'servers', 'groupIntercept',
         'noMsgStart', 'noMsgInclude', 'noGroup', 'yesGroup',
         'muteStop', 'shutdownStop', 'ignoreOnlyReplyAt', 'tempMsgReport', 'pokeReport', 'legacyReply', 'messageBuild',
-        'fileUrlEnabled', 'fileUrlAlways', 'fileUrlThreshold',
+        'fileUrlEnabled', 'fileUrlAlways', 'fileUrlThreshold', 'videoUrlEnabled',
         'experimental',
         'experimental2',
         'mergeForward', 'mergeForwardFlatten', 'mergeForwardTextOnly',

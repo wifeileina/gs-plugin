@@ -472,19 +472,19 @@ export function supportGuoba() {
         {
           field: 'gs.fileUrlEnabled',
           label: 'URL 开关',
-          bottomHelpMessage: '文件、音频、视频上报 GS 时可用链接代替 base64；关闭后一律内嵌 base64',
+          bottomHelpMessage: '文件、音频上报 GS 时可用链接代替 base64；关闭后一律内嵌 base64',
           component: 'Switch',
         },
         {
           field: 'gs.fileUrlAlways',
           label: '全量 URL',
-          bottomHelpMessage: '开启后所有文件/音频/视频都直接上报链接（忽略阈值）',
+          bottomHelpMessage: '开启后所有文件/音频都直接上报链接（忽略阈值）',
           component: 'Switch',
         },
         {
           field: 'gs.fileUrlThreshold',
           label: 'URL 阈值',
-          bottomHelpMessage: '文件/音频/视频超过该大小时自动改用链接上报，避免 base64 撑爆 WebSocket 帧',
+          bottomHelpMessage: '文件/音频超过该大小时自动改用链接上报，避免 base64 撑爆 WebSocket 帧',
           component: 'InputNumber',
           required: true,
           componentProps: {
@@ -492,6 +492,12 @@ export function supportGuoba() {
             placeholder: '15',
             addonAfter: 'MB'
           },
+        },
+        {
+          field: 'gs.videoUrlEnabled',
+          label: '视频直链上报',
+          bottomHelpMessage: '视频有 http(s) 直链时直接上报链接，由 GS 侧下载或按 provider 的 video_url 配置透传；关闭后下载内嵌 base64',
+          component: 'Switch',
         },
         {
           field: 'gs.experimental',
