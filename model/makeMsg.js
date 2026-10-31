@@ -19,7 +19,11 @@ async function makeGSUidReportMsg (e, botId = 'onebot') {
   let appended = false
   if (e.source) {
     replyId = String(e.source.message_id)
-    quoted = await fetchSourceMessage(e, replyId) || e.source
+    // 上报链路里可能已经为同一 replyId 拉过一次被引用消息，有就直接复用
+    const cachedQuoted = e._gsuidQuoted
+    quoted = (cachedQuoted && Array.isArray(cachedQuoted.message))
+      ? cachedQuoted
+      : (await fetchSourceMessage(e, replyId)) || e.source
     if (Array.isArray(e.source.images) && e.source.images.length) {
       // Red 协议自带引用图，合并进被引用消息的 message 里统一处理
       const base = (quoted && Array.isArray(quoted.message)) ? quoted.message : []
@@ -787,13 +791,13 @@ async function makeGSUidSendMsg (data, prevGachaMdList) {
                 logger.error(`[gs-plugin] QQBot 文件直传失败: ${err.message}`)
                 // 回退：写入临时文件走 segment.file
                 const tmpPath = join(TMP_DIR, `${randomUUID()}_${name}`)
-                fs.writeFileSync(tmpPath, buffer)
+                await fs.promises.writeFile(tmpPath, buffer)
                 sendMsg.push(segment.file(tmpPath, name))
               }
             } else {
               // 回退
               const tmpPath = join(TMP_DIR, `${randomUUID()}_${name}`)
-              fs.writeFileSync(tmpPath, buffer)
+              await fs.promises.writeFile(tmpPath, buffer)
               sendMsg.push(segment.file(tmpPath, name))
             }
           }
@@ -812,7 +816,7 @@ async function makeGSUidSendMsg (data, prevGachaMdList) {
               : String(file)
             const buffer = Buffer.from(base64, 'base64')
             const tmpPath = join(TMP_DIR, `${randomUUID()}${sniffAudioExt(buffer)}`)
-            fs.writeFileSync(tmpPath, buffer)
+            await fs.promises.writeFile(tmpPath, buffer)
             sendMsg.push(segment.record(tmpPath))
           }
           break
@@ -828,7 +832,7 @@ async function makeGSUidSendMsg (data, prevGachaMdList) {
               : String(file)
             const buffer = Buffer.from(base64, 'base64')
             const tmpPath = join(TMP_DIR, `${randomUUID()}${sniffVideoExt(buffer)}`)
-            fs.writeFileSync(tmpPath, buffer)
+            await fs.promises.writeFile(tmpPath, buffer)
             sendMsg.push(segment.video(tmpPath))
           }
           break

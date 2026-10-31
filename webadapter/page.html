@@ -132,7 +132,8 @@ body {
 /* ── 分组 ── */
 .group {
   border: 1px solid var(--line); border-radius: 14px;
-  background: var(--surface); overflow: hidden; margin-bottom: 16px;
+  /* 不能 overflow: hidden：群聊选择器的下拉是绝对定位，会被卡片底边裁断 */
+  background: var(--surface); margin-bottom: 16px;
   box-shadow: var(--shadow-sm);
 }
 .group-head {
@@ -140,6 +141,8 @@ body {
   padding: 13px 18px;
   background: linear-gradient(180deg, var(--surface-2), var(--surface));
   border-bottom: 1px solid var(--line);
+  /* 外层不再裁剪，头部自己保留顶部圆角 */
+  border-radius: 13px 13px 0 0;
 }
 .group-head h2 {
   display: flex; align-items: center; gap: 8px;
@@ -1074,9 +1077,10 @@ function renderGroupSelect(index, selectedIds) {
       <span class="arrow">▼</span>
     </div>
     ${selected.length > 0 ? `<div class="group-select-tags" id="groupSelectTags${index}">${selected.map(id => groupTagHtml(`removeGroup(${index},${htmlJsArg(id)})`, id)).join('')}</div>` : ''}
+    <div class="tag-input-wrap" style="margin-top:8px;"><input type="text" class="manual-group-input" placeholder="手动添加群号"><button class="btn btn-xs" onclick="addInterceptGroup(${index})">+</button></div>
     <div class="group-select-dropdown" id="groupDropdown${index}">
       ${groupList.length === 0
-        ? '<div class="no-groups">暂无可用群聊</div>'
+        ? '<div class="no-groups">暂无可用群聊，可手动添加群号</div>'
         : groupList.map(g => {
             const checked = selected.includes(String(g.value)) ? 'checked' : ''
             return `<div class="group-select-option ${checked ? 'selected' : ''}" onclick="toggleGroupOption(${index},'${escHtml(g.value)}',this)">
@@ -1087,6 +1091,30 @@ function renderGroupSelect(index, selectedIds) {
           }).join('')}
     </div>
   `
+  // 手动输入支持回车提交（输入法组合态的回车用于上屏，需放行）
+  const manualInput = wrap.querySelector('.manual-group-input')
+  if (manualInput) {
+    manualInput.onkeydown = (e) => {
+      if (e.isComposing || e.keyCode === 229) return
+      if (e.key === 'Enter') { e.preventDefault(); addInterceptGroup(index) }
+    }
+  }
+}
+
+/** 手动添加群号到拦截规则（下拉列表里没有的群也能直接填） */
+function addInterceptGroup(index) {
+  const wrap = document.getElementById(`groupSelectWrap${index}`)
+  const input = wrap?.querySelector('.manual-group-input')
+  const value = String(input?.value || '').trim()
+  if (!value) return
+  const item = configData.groupIntercept?.[index]
+  if (!item) return
+  if (!item.groupIds) item.groupIds = []
+  if (!item.groupIds.map(String).includes(value)) item.groupIds.push(value)
+  renderGroupSelect(index, item.groupIds)
+  computeDirty()
+  const next = document.getElementById(`groupSelectWrap${index}`)?.querySelector('.manual-group-input')
+  if (next) next.focus()
 }
 
 function toggleGroupDropdown(index) {

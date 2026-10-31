@@ -68,11 +68,30 @@ export default class Client {
     this.status = 0
     this.closed = closed
     this.other = other
+    // 回包按会话串行：兑换码合并、引用上下文都依赖同一会话内的先后顺序
+    this.sessionQueue = new Map()
   }
 
   reconnectCount = 1
   timer = null
   stopReconnect = false
+
+  /**
+   * 回包入队：同一会话内保序，不同会话之间并发。
+   * 避免一张大图的上传堵塞其它群/其它私聊的回包。
+   */
+  enqueueCoreMessage (data) {
+    const key = `${data?.target_type}:${data?.target_id}`
+    const prev = this.sessionQueue.get(key) || Promise.resolve()
+    const next = prev
+      .then(() => this.handleCoreMessage(data))
+      .catch(err => logger.error(`[gs-plugin] 处理 GS 消息时出错: ${err.message}`))
+    this.sessionQueue.set(key, next)
+    next.finally(() => {
+      if (this.sessionQueue.get(key) === next) this.sessionQueue.delete(key)
+    })
+    return next
+  }
 
   async dispatchBuiltMessage (context, sendMsg) {
     const { data, bot, isQQBot } = context
@@ -221,12 +240,15 @@ export default class Client {
       this.reconnectCount = 1
     })
 
-    this.ws.on('message', async event => {
+    this.ws.on('message', event => {
+      let data
       try {
-        await this.handleCoreMessage(JSON.parse(event.toString()))
+        data = JSON.parse(event.toString())
       } catch (err) {
-        logger.error(`[gs-plugin] 处理 GS 消息时出错: ${err.message}`)
+        logger.error(`[gs-plugin] 解析 GS 消息失败: ${err.message}`)
+        return
       }
+      this.enqueueCoreMessage(data)
     })
 
     this.ws.on('close', async code => {

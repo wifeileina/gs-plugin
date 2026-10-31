@@ -286,6 +286,7 @@ class Config {
   }
 
   modify (name, key, value, type = 'config') {
+    if (!key) return
     let path = `${Plugin_Path}/config/${type}/${name}.yaml`
     // 写入前确保 oldConfig 保存的是修改前的完整快照
     const configKey = `${type}.${name}`

@@ -5,6 +5,25 @@ import _ from 'lodash'
 import cfg from '../../../../lib/config/config.js'
 import PluginsLoader from '../../../../lib/plugins/loader.js'
 
+// 成员资料/头像只用于展示：拿不到可以留空由 GS 侧回查，不应拖慢消息上报
+const MEMBER_INFO_TIMEOUT = 800
+const AVATAR_TIMEOUT = 800
+
+/** 限时等待；超时按 undefined 降级，不再无限阻塞 */
+function withTimeout (value, ms) {
+  let timer = null
+  return Promise.race([
+    Promise.resolve(value).then(res => {
+      if (timer) clearTimeout(timer)
+      return res
+    }),
+    new Promise(resolve => {
+      timer = setTimeout(() => resolve(undefined), ms)
+      timer.unref?.()
+    })
+  ])
+}
+
 // 取消息开头的“有效指令文本”：跳过前置的@提及、引用段（at 段 / CQ 码 / 纯文本@ / reply 段）
 function getLeadingCleanText (message) {
   const segs = Array.isArray(message) ? message : []
@@ -118,14 +137,16 @@ Bot.on('message', async e => {
     const group_id = await getGroup_id({ group_id: e.group_id })
     msg.group_id = e.group_id
     msg.param.group_id = group_id
-    userInfo = await e.bot?.pickMember?.(e.group_id, e.user_id)
+    userInfo = await withTimeout(e.bot?.pickMember?.(e.group_id, e.user_id), MEMBER_INFO_TIMEOUT)
   } else if (e.message_type == 'private') {
-    userInfo = await e.bot?.pickFriend?.(e.user_id)
+    userInfo = await withTimeout(e.bot?.pickFriend?.(e.user_id), MEMBER_INFO_TIMEOUT)
     msg.isPrivate = true
   } else {
     return false
   }
-  const avatar = await userInfo?.getAvatarUrl?.()
+  // 事件已带头像时直接用，省掉一次查询；都没有就限时补查，超时按无头像上报
+  const avatar = e.avatar || e.sender?.avatar ||
+    await withTimeout(userInfo?.getAvatarUrl?.(), AVATAR_TIMEOUT)
   if (avatar) {
     msg.param.avatar = avatar
     msg.avatar = avatar
@@ -133,10 +154,12 @@ Bot.on('message', async e => {
   // 判断云崽前缀
   msg = onlyReplyAt(msg, 'gs')
   if (!msg) return false
+  // 多连接时每个连接要各自改前缀，必须独立副本；单连接直接复用，省一次深拷贝
+  const needIsolatedCopy = sendSocketList.length > 1
   for (const i of sendSocketList) {
     if (i.status == 1) {
       msg.onlyReplyAt = Config.onlyReplyAt[i.other.rawName || i.name] || Config.onlyReplyAt
-      const tmpMsg = onlyReplyAt(_.cloneDeep(msg), 'gs')
+      const tmpMsg = onlyReplyAt(needIsolatedCopy ? _.cloneDeep(msg) : msg, 'gs')
       if (!tmpMsg) continue
       let reportMsg = null
 
@@ -162,6 +185,8 @@ Bot.on('message', async e => {
             }
           }
           if (sourceMsg?.message && Array.isArray(sourceMsg.message)) {
+            // 交给 makeGSUidReportMsg 复用，避免同一 replyId 再走一次 get_msg
+            tmpMsg._gsuidQuoted = sourceMsg
             const images = sourceMsg.message.filter(s => s.type === 'image')
             if (images.length > 0) {
               logger.info(`[gs-plugin] 从被引用消息中提取到 ${images.length} 张图片，注入到 gscore 消息中`)

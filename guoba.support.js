@@ -665,6 +665,9 @@ export function supportGuoba() {
         }
         for (const key in data) {
           let split = key.split('.')
+          // 只处理 gs.xxx 形式的字段：没有前缀时 split[1] 为空，
+          // 会把整份表单对象写成 null / 空键，导致配置文件重复键解析失败
+          if (split[0] !== 'gs' || !split[1]) continue
           if (key === 'gs.gsuidBotPrefixList') {
             const list = Array.isArray(data[key]) ? data[key] : []
             const map = {}
