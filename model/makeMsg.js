@@ -602,15 +602,13 @@ async function appendReply (message, replyId, quoted, e) {
   const { name: quotedName, uid: quotedUid } = resolveQuotedSenderName(quoted, e)
   const selfId = String(e?.self_id ?? '')
   const isSelfQuote = !!selfId && !!quotedUid && String(quotedUid) === selfId
-  const isOtherQuote = !!quotedUid && String(quotedUid) !== selfId
   // 引用 bot 自己的消息：补一个 at(bot) 段让 core 置 is_tome（该段不进正文/at_list，
   // 对用户不可见），配合 has_reply 触发 core 的 quoted_tome（"引用了你的上一条"）语义。
   if (isSelfQuote) message.push({ type: 'at', data: selfId })
-  // 引用别人的消息：core 的引用消解（OutboundAudit）本来就查不到，加 [引用 昵称] 前缀
-  // 不损失匹配、还能让 AI 知道来源；引用自己的消息保持纯原文，交给 core 消解。
-  // 实验性2（默认关闭）：强制对所有引用都加昵称前缀（会破坏 core 的原文匹配）。
+  // 实验性2（默认关闭）：引用时在正文前加 [引用 昵称]，让 AI 知道原话出自谁。
+  // 关闭时保持纯原文，交给 core 消解「引用对象」。
   let replyPrefix = ''
-  if (Config.experimental2 === true || isOtherQuote) {
+  if (Config.experimental2 === true) {
     if (quotedName || quotedUid) replyPrefix = `[引用 ${quotedName || quotedUid}] `
   }
   if (replyText) {

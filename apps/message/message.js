@@ -58,14 +58,14 @@ Bot.on('message', async e => {
   // 联动 yunzai 的仅@设置：yunzai 判定为非主动提及的消息不上报（"忽略仅@"开启时不生效）
   if (!Config.ignoreOnlyReplyAt && isYunzaiOnlyReplyAtBlocked(e)) return false
   if (isReportBlocked(e)) return false
-  // 判断插件前缀（跳过前置@提及及@后的空格再匹配）
+  // 判断插件前缀（先剥离已配置的忽略前缀，再匹配；跳过前置@提及及@后的空格）
   if (Array.isArray(Config.noMsgStart) && Config.noMsgStart.length > 0) {
-    const cleanText = getLeadingCleanText(e.message)
+    const cleanText = stripIgnoredPrefixes(getLeadingCleanText(e.message))
     if (cleanText && Config.noMsgStart.some(i => cleanText.startsWith(i))) return false
   }
   // 群聊消息拦截（按群聊+前缀+bot账号）
   if (e.group_id && Array.isArray(Config.groupIntercept) && Config.groupIntercept.length > 0) {
-    const cleanText = getLeadingCleanText(e.message)
+    const cleanText = stripIgnoredPrefixes(getLeadingCleanText(e.message))
     for (const rule of Config.groupIntercept) {
       // 检查botId（不填则对所有bot生效）
       if (rule.botId && String(rule.botId) !== String(e.self_id)) continue
@@ -355,16 +355,12 @@ function markGuideCommandWindow (e) {
   }
 }
 
-function applyPrefixIgnore (e) {
+/** 反复剥离「忽略前缀」（如 "/"），返回去掉前缀后的文本 */
+function stripIgnoredPrefixes (text) {
   const ignoreList = Config.gsuidPrefixIgnore
-  if (!Array.isArray(ignoreList) || ignoreList.length === 0) return
-  if (!Array.isArray(e.message)) return
+  let rest = String(text || '').replace(/^\s+/, '')
+  if (!Array.isArray(ignoreList) || ignoreList.length === 0) return rest
 
-  const textIndex = e.message.findIndex(item => item?.type === 'text')
-  if (textIndex < 0) return
-
-  let rest = String(e.message[textIndex].text || '').replace(/^\s+/, '')
-  let changed = false
   for (;;) {
     let matched = false
     for (const p of ignoreList) {
@@ -377,10 +373,17 @@ function applyPrefixIgnore (e) {
       }
     }
     if (!matched) break
-    changed = true
   }
+  return rest
+}
 
-  if (changed) {
+function applyPrefixIgnore (e) {
+  if (!Array.isArray(e.message)) return
+  const textIndex = e.message.findIndex(item => item?.type === 'text')
+  if (textIndex < 0) return
+
+  const rest = stripIgnoredPrefixes(e.message[textIndex].text)
+  if (rest !== e.message[textIndex].text) {
     e.message[textIndex].text = rest
     logger.debug(`[gs-plugin] 前缀忽略后上报: ${rest}`)
   }

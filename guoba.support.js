@@ -508,7 +508,7 @@ export function supportGuoba() {
         {
           field: 'gs.experimental2',
           label: '实验性2',
-          bottomHelpMessage: '默认按来源分流：引用自己的消息用原文、别人的加 [引用 昵称]；开启后强制所有引用都加前缀（会破坏 core 的引用对象匹配）；默认关闭',
+          bottomHelpMessage: '引用时在被引用正文前加 [引用 昵称]，让 AI 知道原话出自谁；关闭时保持纯原文交给 core 消解。默认关闭，开启会影响 core 的引用对象匹配',
           component: 'Switch',
         },
         {
