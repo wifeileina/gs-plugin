@@ -71,8 +71,15 @@ async function makeGSUidReportMsg (e, botId = 'onebot') {
         if (!fileUrl && rawFile && /^https?:/i.test(rawFile)) fileUrl = cleanGSUidUrl(rawFile)
         if (!fileUrl && fileId) fileUrl = await resolveGSUidFileUrl(e, fileId)
         if (fileUrl) {
-          const seg = await buildGSUidFileSeg(fileUrl, name)
-          if (seg) message.push(seg)
+          const result = await buildGSUidFileSeg(fileUrl, name)
+          if (result?.seg) message.push(result.seg)
+          // 桥接：core 面板上传只认 http image 段、不认 file 段。
+          // 图片文件额外上报一个 http image 段，让 core 的 get_image 能取到图；
+          // 原 file 段保留，不影响文件句柄 / AI 读文件。isImage 已结合文件名与魔数判断。
+          if (result?.isImage) {
+            logger.info(`[gs-plugin] 文件桥接为 http image 段: name=${name}`)
+            message.push({ type: 'image', data: fileUrl })
+          }
         } else {
           logger.debug(`[gs-plugin] 文件段缺少可用下载链接，已跳过: name=${name}, file_id=${fileId || '无'}`)
         }
@@ -206,6 +213,27 @@ function stringifyGSUidId (v) {
 function cleanGSUidUrl (v) {
   if (typeof v !== 'string') return v
   return v.replace(/^`+|`+$/g, '')
+}
+
+/** 按扩展名判断文件是否为图片：core 面板上传只接受图片，非图片文件不提升为 image 段 */
+function isImageFileName (name) {
+  return /\.(jpe?g|png|gif|webp|bmp|tiff?|svg|ico|heic|heif|avif)$/i.test(String(name || '').trim())
+}
+
+/** 按文件魔数判断 buffer 是否为图片：文件名丢失（如 QQ 回复链退化为 'file'）时的兜底 */
+function isImageBuffer (buffer) {
+  if (!buffer || buffer.length < 12) return false
+  const b = buffer
+  // JPEG FF D8 FF / PNG 89 50 4E 47 / GIF 47 49 46 38 / BMP 42 4D
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return true
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return true
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) return true
+  if (b[0] === 0x42 && b[1] === 0x4d) return true
+  const head = b.subarray(0, 12).toString('latin1')
+  if (head.startsWith('RIFF') && head.includes('WEBP')) return true
+  // TIFF: II*\0 或 MM\0*
+  if ((b[0] === 0x49 && b[1] === 0x49 && b[2] === 0x2a) || (b[0] === 0x4d && b[1] === 0x4d && b[2] === 0x00)) return true
+  return false
 }
 
 const MEDIA_FETCH_TIMEOUT = 10000
@@ -347,23 +375,26 @@ async function buildGSUidFileSeg (fileUrl, name) {
   const enabled = Config.fileUrlEnabled && /^https?:/i.test(String(fileUrl))
   const threshold = Config.fileUrlThreshold * 1024 * 1024
   const urlSeg = { type: 'file', data: `${name}|${fileUrl}` }
+  const byName = isImageFileName(name)
 
-  if (enabled && Config.fileUrlAlways) return urlSeg
+  // URL 模式未下载字节，只能按文件名判断是否为图片
+  if (enabled && Config.fileUrlAlways) return { seg: urlSeg, isImage: byName }
   if (enabled) {
     const size = await probeGSUidFileSize(fileUrl)
-    if (size > 0 && size > threshold) return urlSeg
+    if (size > 0 && size > threshold) return { seg: urlSeg, isImage: byName }
   }
 
   try {
     const res = await fetch(fileUrl)
     const buffer = Buffer.from(await res.arrayBuffer())
     // 下载后才发现超阈值时同样改走 URL，避免 base64 撑爆 WebSocket 帧
-    if (enabled && buffer.length > threshold) return urlSeg
-    return { type: 'file', data: `${name}|${buffer.toString('base64')}` }
+    if (enabled && buffer.length > threshold) return { seg: urlSeg, isImage: byName }
+    // 文件名丢失（如 QQ 回复链里退化为 'file'）时，靠文件魔数兜底判断是否为图片
+    return { seg: { type: 'file', data: `${name}|${buffer.toString('base64')}` }, isImage: byName || isImageBuffer(buffer) }
   } catch (err) {
     logger.debug(`[gs-plugin] 下载文件失败: ${err.message}`)
     // 下载失败但允许 URL 时退回直接上报链接，避免整段文件丢失
-    return enabled ? urlSeg : null
+    return enabled ? { seg: urlSeg, isImage: byName } : null
   }
 }
 
@@ -578,8 +609,9 @@ async function appendReply (message, replyId, quoted, e) {
       if (useLinkMode) {
         if (mediaUrl) mediaLines.push(`文件链接: ${fileName} ${mediaUrl}`)
       } else if (mediaUrl) {
-        const fileSeg = await buildGSUidFileSeg(mediaUrl, fileName)
-        if (fileSeg) message.push(fileSeg)
+        const result = await buildGSUidFileSeg(mediaUrl, fileName)
+        if (result?.seg) message.push(result.seg)
+        if (result?.isImage) message.push({ type: 'image', data: mediaUrl })
       }
     }
   }
