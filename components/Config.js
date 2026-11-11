@@ -175,10 +175,6 @@ class Config {
     return this.getDefOrConfig('gs-config').experimental2 === true
   }
 
-  get legacyReply () {
-    return this.messageBuild.legacyReply
-  }
-
   get messageBuild () {
     const defaults = this.getdefSet('gs-config')
     const userConfig = this.getConfig('gs-config')

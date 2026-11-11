@@ -6,16 +6,28 @@ export function normalizeBotId (value) {
 }
 
 export function normalizeTargetId (value) {
-  return String(value || '').trim().split(':').pop()
+  return normalizeBotId(value)
 }
 
-export function isQQBotMessage (data, bot) {
-  const adapter = bot?.adapter
-  const adapterMatched = [data?.bot_adapter, adapter?.id, adapter?.name, adapter?.platform, adapter]
+/** QQBot 官方会话目标都是 openid（32 位十六进制），纯数字属于 OneBot 等协议端 */
+export function isQQBotTargetId (value) {
+  // target_id 可能带 bot 前缀（如 4015042124:openid），先剥掉再判断
+  return /^[0-9a-f]{32}$/i.test(normalizeTargetId(value))
+}
+
+/** 按适配器判断账号是否 QQBot（不看目标 ID） */
+export function isQQBotAdapter (adapter) {
+  return [adapter?.id, adapter?.name, adapter?.platform, adapter]
     .some(value => String(value || '').toLowerCase() === 'qqbot')
-  // GSUID 回包可能缺失 bot_adapter；QQBot 群/频道目标 ID 为 32 位十六进制。
-  const targetMatched = /^(?:[0-9a-f]{32})$/i.test(normalizeTargetId(data?.target_id))
-  return adapterMatched || targetMatched
+}
+
+/** 判断回包是否属于 QQBot：适配器、QQBot 账号配置、openid 目标三者任一命中 */
+export function isQQBotMessage (data, bot) {
+  const adapterMatched = isQQBotAdapter(bot?.adapter) ||
+    String(data?.bot_adapter || '').toLowerCase() === 'qqbot'
+  const accountMatched = Object.hasOwn(Bot.QQBotConfig?.config?.markdown || {}, normalizeBotId(data?.bot_self_id))
+  // GSUID 回包可能缺失 bot_adapter，QQBot 群/频道/私聊目标 ID 都是 32 位十六进制
+  return adapterMatched || accountMatched || isQQBotTargetId(data?.target_id)
 }
 
 function normalizeLegacyReply (value) {
@@ -63,7 +75,7 @@ export function markGuideActiveWindow (botId, targetId, now = Date.now()) {
   return true
 }
 
-export function isGuideActiveWindow (botId, targetId, now = Date.now()) {
+function isGuideActiveWindow (botId, targetId, now = Date.now()) {
   const key = getGuideActiveWindowKey(botId, targetId)
   if (!key) return false
 

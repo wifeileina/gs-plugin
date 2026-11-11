@@ -4,6 +4,9 @@ import { Version, Config } from './index.js'
 import {
   normalizeBotId,
   normalizeTargetId,
+  isQQBotAdapter,
+  isQQBotMessage,
+  isQQBotTargetId,
   shouldForceActiveMessage
 } from './MessageBuild.js'
 
@@ -20,49 +23,59 @@ function shouldUseLegacy (legacyCfg, scopeGroupId, botSelfId) {
   return groupMatch && botMatch
 }
 
-function isQQBotMessage (data, bot) {
-  const botSelfId = normalizeBotId(data.bot_self_id)
-  const adapter = bot?.adapter
-  const adapterIds = [data.bot_adapter, adapter?.id, adapter?.name, adapter?.platform]
-  const isQQBotAdapter = adapterIds.some(value => String(value || '').toLowerCase() === 'qqbot')
-  const isQQBotAccount = Object.hasOwn(Bot.QQBotConfig?.config?.markdown || {}, botSelfId)
-  const isQQBotTarget = /^[0-9a-f]{32}$/i.test(normalizeTargetId(data.target_id))
-  return isQQBotAdapter || isQQBotAccount || isQQBotTarget
-}
-
-/** 目标已注销/已解散时 QQ 返回 11255「请求的资源不存在」 */
+/** 目标不可达缓存：普通不可达 30 分钟，明确注销/解散 12 小时（11255） */
 const UNREACHABLE_TTL = 30 * 60 * 1000
+const GONE_TTL = 12 * 60 * 60 * 1000
 const unreachableTargets = new Map()
 /** 普通发送失败的重试上限与退避基数 */
 const SEND_RETRY_MAX = 3
 const SEND_RETRY_BASE_MS = 1000
 
+/** 永久失效：11255 / 资源不存在 / 已注销 */
+const GONE_PATTERN = /11255|资源不存在|已注销/
+/** 不应重试的错误：永久失效，或「无法获取用户信息」（目标与账号平台不符/已失效） */
+const UNREACHABLE_PATTERN = /11255|资源不存在|已注销|无法获取用户信息/
+
 function isTargetGoneError (err) {
-  const message = String(err?.message || err || '')
-  return /11255|资源不存在|已注销/.test(message)
+  return UNREACHABLE_PATTERN.test(String(err?.message || err || ''))
+}
+
+/** 永久失效与临时不可达使用不同缓存时长 */
+function unreachableTtlOf (err) {
+  return GONE_PATTERN.test(String(err?.message || err || '')) ? GONE_TTL : UNREACHABLE_TTL
 }
 
 function targetKeyOf (data) {
-  return `${data?.target_type}:${data?.target_id}`
+  // 账号 + 会话才是完整目标：同一 openid 在不同账号下是否可达并不相同
+  return `${normalizeBotId(data?.bot_self_id) || '-'}:${data?.target_type}:${normalizeTargetId(data?.target_id)}`
 }
 
-/** QQBot 官方账号的会话目标都是 openid（32 位十六进制），纯数字属于 OneBot 等协议端 */
-function isQQBotTargetId (id) {
-  return /^[0-9a-f]{32}$/i.test(String(id || ''))
+/** 取出 target_id 前缀里的账号（如 4015042124:openid 的 4015042124），没有前缀返回空串 */
+function botIdPrefixOf (targetId) {
+  const [prefix, ...rest] = String(targetId || '').split(':')
+  return rest.length ? normalizeBotId(prefix) : ''
 }
 
-/** 只按适配器判断账号是否 QQBot，不看 target */
-function isQQBotAdapterOf (bot) {
-  const adapter = bot?.adapter
-  return [adapter?.id, adapter?.name, adapter?.platform, adapter]
-    .some(value => String(value || '').toLowerCase() === 'qqbot')
+/** 找一个已登录的 QQBot 账号实例 */
+function findQQBotBot () {
+  try {
+    for (const value of Object.values(Bot)) {
+      if (!value || typeof value !== 'object') continue
+      if (!value.adapter) continue
+      if (typeof value.pickGroup !== 'function' && typeof value.pickFriend !== 'function') continue
+      if (isQQBotAdapter(value.adapter)) return value
+    }
+  } catch (error) {
+    logger.debug(`[gs-plugin] 查找 QQBot 账号失败: ${error.message}`)
+  }
+  return null
 }
 
 /** 仅让 GSUID 的 QQBot 主动消息携带单次 legacy 标记 */
 async function sendLegacyQQBotMsg (bot, targetType, targetId, msg, botSelfId) {
   const markdownConfig = Bot.QQBotConfig?.config?.markdown || {}
   const adapters = Array.isArray(Bot.adapter) ? Bot.adapter : []
-  const qqBotAdapter = adapters.find(adapter => String(adapter?.id).toLowerCase() === 'qqbot')
+  const qqBotAdapter = adapters.find(isQQBotAdapter)
 
   if (!Object.hasOwn(markdownConfig, normalizeBotId(botSelfId)) || !qqBotAdapter) return null
 
@@ -77,6 +90,8 @@ async function sendLegacyQQBotMsg (bot, targetType, targetId, msg, botSelfId) {
       return await qqBotAdapter.sendFriendMsg({ ...target, legacy: true }, msg)
     }
   } catch (error) {
+    // 目标已注销/失效时换普通通道重发也是白费一次请求，直接交给上层标记不可达
+    if (isTargetGoneError(error)) throw error
     logger.warn(`[gs-plugin] QQBot Legacy 主动发送失败，改用普通主动发送: ${error.message}`)
   }
 
@@ -109,7 +124,7 @@ export default class Client {
    * 避免一张大图的上传堵塞其它群/其它私聊的回包。
    */
   enqueueCoreMessage (data) {
-    const key = `${data?.target_type}:${data?.target_id}`
+    const key = `${data?.target_type}:${normalizeTargetId(data?.target_id)}`
     const prev = this.sessionQueue.get(key) || Promise.resolve()
     const next = prev
       .then(() => this.handleCoreMessage(data))
@@ -125,7 +140,7 @@ export default class Client {
     const key = targetKeyOf(context?.data)
     const blocked = unreachableTargets.get(key)
     if (blocked) {
-      if (Date.now() - blocked.at < UNREACHABLE_TTL) {
+      if (Date.now() - blocked.at < blocked.ttl) {
         logger.debug(`[gs-plugin] 跳过不可达目标 ${key}：${blocked.reason}`)
         return
       }
@@ -139,7 +154,11 @@ export default class Client {
         return
       } catch (err) {
         if (isTargetGoneError(err)) {
-          unreachableTargets.set(key, { at: Date.now(), reason: String(err?.message || err) })
+          unreachableTargets.set(key, {
+            at: Date.now(),
+            ttl: unreachableTtlOf(err),
+            reason: String(err?.message || err)
+          })
           logger.warn(`[gs-plugin] 目标不可达，已暂停发送 ${key}：${err?.message || err}`)
           return
         }
@@ -232,19 +251,37 @@ export default class Client {
       logger.warn(`[gs-plugin] 兑换码回包未关联到请求上下文: target_id=${data.target_id}, target_type=${data.target_type}`)
     }
 
-    const declared = Bot[data.bot_self_id] || Bot[normalizeBotId(data.bot_self_id)] || Bot
-    let bot = declared
+    let bot = Bot[data.bot_self_id] || Bot[normalizeBotId(data.bot_self_id)] || Bot
     // core 主动消息可能把「人格绑定的 bot 账号」与「历史会话目标」拼在一起，
     // 出现 QQBot 账号 + 纯数字 QQ 号的跨平台错配；此时按目标格式回到会话本身的 bot
-    if (bot && !isQQBotTargetId(data.target_id) && isQQBotAdapterOf(bot)) {
+    if (bot && !isQQBotTargetId(data.target_id) && isQQBotAdapter(bot.adapter)) {
       const sessionSelfId = String(latest?.e?.self_id || '')
       const sessionBot = sessionSelfId && Bot[sessionSelfId]
-      if (sessionBot && !isQQBotAdapterOf(sessionBot)) {
+      if (sessionBot && !isQQBotAdapter(sessionBot.adapter)) {
         logger.warn(
           `[gs-plugin] 回包账号与目标平台不符（${data.bot_self_id} → ${data.target_id}），改用会话 bot ${sessionSelfId}`,
         )
         data.bot_self_id = sessionSelfId
         bot = sessionBot
+      }
+    }
+    // openid 只在签发它的 QQBot 应用内有效：优先用 target_id 前缀里的账号，其次用会话事件来源账号，
+    // 最后才任选一个 QQBot 账号；否则会落到 OneBot 上，服务器会报「无法获取用户信息」
+    if (isQQBotTargetId(data.target_id)) {
+      const prefixBotId = botIdPrefixOf(data.target_id)
+      const sessionSelfId = String(latest?.e?.self_id || '')
+      const owner = [prefixBotId, sessionSelfId]
+        .map(id => (id ? Bot[id] : null))
+        .find(item => item && isQQBotAdapter(item.adapter))
+      const qqBot = owner || (isQQBotAdapter(bot.adapter) ? null : findQQBotBot())
+      if (qqBot && qqBot !== bot) {
+        const qqBotId = String(qqBot.uin ?? qqBot.self_id ?? '')
+        logger.warn(
+          `[gs-plugin] 回包账号与 openid 归属不符（${data.bot_self_id || '未指定'} → ${data.target_id}），改用 QQBot 账号 ${qqBotId}`,
+        )
+        data.bot_self_id = qqBotId
+        data.bot_adapter = 'qqbot'
+        bot = qqBot
       }
     }
     if (!bot) {
@@ -253,7 +290,7 @@ export default class Client {
     }
 
     const isQQBot = isQQBotMessage(data, bot)
-    const gachaKey = `${data.bot_self_id}:${data.target_type}:${data.target_id}`
+    const gachaKey = `${data.bot_self_id}:${data.target_type}:${normalizeTargetId(data.target_id)}`
     const gachaBatch = this.gachaBatch?.[gachaKey]
     const { sendMsg, quote, gachaMdList, isPureGacha } = await makeGSUidSendMsg(data, gachaBatch?.mdList)
 

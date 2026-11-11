@@ -1,5 +1,6 @@
 import { join } from 'path'
 import { Config, Version } from '../components/index.js'
+import { isQQBotMessage, normalizeTargetId } from '../components/MessageBuild.js'
 import { TMP_DIR } from './tool.js'
 import { randomUUID } from 'crypto'
 import fs from 'fs'
@@ -729,14 +730,8 @@ async function makeGSUidSendMsg (data, prevGachaMdList) {
   const replyIdData = (Array.isArray(content) ? content : []).find(s => s?.type === 'reply_id')?.data
   const gachaMdList = Array.isArray(prevGachaMdList) ? [...prevGachaMdList] : []
   const sendMsg = []
-  const adapter = bot?.adapter
-  const botSelfId = String(data.bot_self_id).split(':')[0]
-  const isQQBotAdapter = [data.bot_adapter, adapter?.id, adapter?.name, adapter?.platform, adapter]
-    .some(value => String(value || '').toLowerCase() === 'qqbot')
-  const isQQBotAccount = Object.hasOwn(Bot.QQBotConfig?.config?.markdown || {}, botSelfId)
-  // QQBot 群聊和私聊的目标 ID 是 32 位十六进制字符串；GSUID 回包缺 bot_self_id 时用作兑换码转换兜底。
-  const isQQBotTarget = /^(?:[0-9a-f]{32})$/i.test(String(data.target_id || '').split(':').pop())
-  const isQQBot = isQQBotAdapter || isQQBotAccount || isQQBotTarget
+  // GSUID 回包缺 bot_self_id 时，openid 目标也能兜底识别为 QQBot（用于兑换码 Markdown）
+  const isQQBot = isQQBotMessage(data, bot)
   if (content[0].type.startsWith('log')) {
     logger.info(content[0].data)
   } else {
@@ -796,9 +791,7 @@ async function makeGSUidSendMsg (data, prevGachaMdList) {
             if (sdk?.request) {
               try {
                 const fileData = buffer.toString('base64')
-                const targetId = data.target_id.includes(':')
-                  ? data.target_id.split(':').pop()
-                  : data.target_id
+                const targetId = normalizeTargetId(data.target_id)
                 const apiType = data.target_type === 'direct' ? 'users' : 'groups'
                 const uploadRet = await sdk.request.post(`/v2/${apiType}/${targetId}/files`, {
                   file_name: name,

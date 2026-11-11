@@ -1,5 +1,5 @@
 import { sendSocketList, Config, Version } from '../../components/index.js'
-import { isQQBotMessage, markGuideActiveWindow } from '../../components/MessageBuild.js'
+import { isQQBotMessage, markGuideActiveWindow, normalizeTargetId } from '../../components/MessageBuild.js'
 import { makeGSUidReportMsg, makeGSUidMetaReportMsg, setLatestMsg, setMsg, getGroup_id, getUser_id } from '../../model/index.js'
 import _ from 'lodash'
 import cfg from '../../../../lib/config/config.js'
@@ -127,7 +127,7 @@ Bot.on('message', async e => {
   const sessionId = String(e.group_id || e.user_id)
   const latestMessage = { time, message_id: e.message_id, reply: e.reply, e }
   // 回包不会稳定携带 bot_self_id，因此所有请求都缓存会话上下文；最终是否使用 QQBot Markdown 仍由回填的账号配置决定。
-  for (const cacheId of new Set([sessionId, sessionId.split(':').pop()])) {
+  for (const cacheId of new Set([sessionId, normalizeTargetId(sessionId)])) {
     setLatestMsg(cacheId, latestMessage)
   }
   logger.debug(`[gs-plugin] 已缓存 GSUID 请求上下文: target_id=${sessionId}, bot=${e.self_id}`)

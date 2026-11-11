@@ -38,16 +38,6 @@ async function saveMessage_id ({ message_id, seq, rand, time, user_id, group_id,
   })
 }
 
-async function findMessage_id (where, order = [['createdAt', 'DESC']]) {
-  return executeSync(async () => {
-    const result = await message_id_table.findOne({
-      where,
-      order
-    })
-    return result?.dataValues
-  })
-}
-
 if (existSQL) {
   schedule.scheduleJob('0 30 0 * * ?', async function () {
     await executeSync(async () => {
@@ -66,7 +56,5 @@ if (existSQL) {
 }
 
 export {
-  message_id_table,
-  saveMessage_id,
-  findMessage_id
+  saveMessage_id
 }

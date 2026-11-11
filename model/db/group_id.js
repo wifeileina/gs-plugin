@@ -52,20 +52,7 @@ async function findGroup_id(where, order = [['createdAt', 'DESC']]) {
     });
 }
 
-async function updateGroup_id(where, custom) {
-    return executeSync(async () => {
-        const result = await group_id_table.update({
-            custom: custom
-        }, {
-            where
-        });
-        return result;
-    });
-}
-
 export {
-    group_id_table,
     saveGroup_id,
-    findGroup_id,
-    updateGroup_id
+    findGroup_id
 }

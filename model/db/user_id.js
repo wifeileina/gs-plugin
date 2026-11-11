@@ -52,20 +52,7 @@ async function findUser_id(where, order = [['createdAt', 'DESC']]) {
     });
 }
 
-async function updateUser_id(where, custom) {
-    return executeSync(async () => {
-        const result = await user_id_table.update({
-            custom: custom
-        }, {
-            where
-        });
-        return result;
-    });
-}
-
 export {
-    user_id_table,
     saveUser_id,
-    findUser_id,
-    updateUser_id
+    findUser_id
 }
