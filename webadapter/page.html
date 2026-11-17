@@ -611,7 +611,7 @@ input[type="checkbox"]:checked::after {
 
     <div class="group">
       <div class="group-head"><h2>强制主动消息</h2></div>
-      <div class="group-note">启用后不做权限探测，对所有 QQBot 群聊生效。匹配模式开启时，仅末尾为“攻略”的指令所在会话会在 60 秒内使用主动发送。</div>
+      <div class="group-note">启用后对所有 QQBot 群聊使用主动发送；无主动权限的群（40034105）探测到后 30 分钟内改走被动。QQBot 的「合并转发发送方式」不是逐条拆发（split）时同样不启用主动。匹配模式开启时，仅末尾为“攻略”的指令所在会话会在 60 秒内使用主动发送。</div>
       <div class="rows">
         <div class="field"><label>启用</label><div class="ctl"><div class="toggle" id="forceActiveEnabled" onclick="toggle(this)"></div></div></div>
         <div class="field">

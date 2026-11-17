@@ -104,7 +104,8 @@ messageBuild:
     enabled: false
     groups: []
     bots: []
-  # 启用后不做权限探测，对所有 QQBot 群聊生效
+  # 启用后对所有 QQBot 群聊使用主动发送；无主动权限的群（40034105）探测到后 30 分钟内改走被动
+  # QQBot 的「合并转发发送方式」不是逐条拆发（split）时，同样不启用主动
   forceActiveMessage:
     enabled: false
     # 关闭=所有回包主动发送；开启=仅在收到末尾为“攻略”的指令后，当前会话 60 秒内主动发送

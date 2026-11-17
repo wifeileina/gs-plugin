@@ -395,7 +395,7 @@ export function supportGuoba() {
         {
           field: 'gs.messageBuildForceActiveEnabled',
           label: '启用强制主动消息',
-          bottomHelpMessage: '启用后，不做权限探测，对所有 QQBot 群聊生效。',
+          bottomHelpMessage: '启用后对所有 QQBot 群聊使用主动发送；无主动权限的群（40034105）探测到后 30 分钟内改走被动。QQBot 的「合并转发发送方式」不是逐条拆发（split）时同样不启用主动。',
           component: 'Switch'
         },
         {

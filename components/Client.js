@@ -50,6 +50,31 @@ function targetKeyOf (data) {
   return `${normalizeBotId(data?.bot_self_id) || '-'}:${data?.target_type}:${normalizeTargetId(data?.target_id)}`
 }
 
+/** QQBot 群聊主动消息无权限（40034105）：探测到后一段时间内改走被动发送 */
+const ACTIVE_DENIED_TTL = 30 * 60 * 1000
+const activeDeniedTargets = new Map()
+
+function isActiveDeniedError (err) {
+  // 40034105「主动消息失败, 无权限」：该群/该应用没有主动推送权限
+  return /40034105|主动消息失败/.test(String(err?.message || err || ''))
+}
+
+function isActiveDeniedTarget (data) {
+  const key = targetKeyOf(data)
+  const at = activeDeniedTargets.get(key)
+  if (!at) return false
+  if (Date.now() - at < ACTIVE_DENIED_TTL) return true
+  activeDeniedTargets.delete(key)
+  return false
+}
+
+/** QQBot「合并转发发送方式」：只有逐条拆发（split）或未配置时才允许强制主动，
+ *  merge/image/url/card 依赖被动消息语境，主动发送会不合规或失败 */
+function isForwardSplitMode () {
+  const mode = Bot.QQBotConfig?.config?.forwardMethod
+  return !mode || String(mode).toLowerCase() === 'split'
+}
+
 /** 取出 target_id 前缀里的账号（如 4015042124:openid 的 4015042124），没有前缀返回空串 */
 function botIdPrefixOf (targetId) {
   const [prefix, ...rest] = String(targetId || '').split(':')
@@ -71,6 +96,41 @@ function findQQBotBot () {
   return null
 }
 
+/** core 指定了引用消息时，在被动回复前插入回复段；主动消息平台不允许引用，直接忽略 */
+function prependQuoteReply (sendMsg, quote) {
+  if (!Array.isArray(sendMsg)) return false
+  const id = quote?.message_id ?? quote?.id
+  if (!id) return false
+  // 已有回复段时不重复插入（重试会复用同一数组）
+  if (sendMsg.some(seg => seg?.type === 'reply' || seg?.type === 'reply_id')) return false
+  sendMsg.unshift({ type: 'reply', id: String(id) })
+  return true
+}
+
+/** 带引用发送（被动/主动都适用）；引用本身失效（消息 id 不存在/无权限）时去掉引用段重发，避免整条回包丢失 */
+async function sendWithQuoteFallback (sendFn, sendMsg, quote) {
+  const hasQuote = prependQuoteReply(sendMsg, quote)
+  try {
+    return await sendFn()
+  } catch (error) {
+    if (!hasQuote) throw error
+    sendMsg.shift()
+    logger.warn(`[gs-plugin] 引用发送失败，已改为普通发送: ${error.message}`)
+    return await sendFn()
+  }
+}
+
+/** 从各适配器的发送结果里取出真实平台消息 id（单值或数组）；被动占位 id 不能回执给 core */
+function pickSentMessageId (ret) {
+  const raw = ret?.message_id ?? ret?.id ?? ret?.data?.message_id
+  const clean = value => (value && !String(value).startsWith('passive_') ? String(value) : null)
+  if (Array.isArray(raw)) {
+    const ids = raw.map(clean).filter(Boolean)
+    return ids.length ? ids : null
+  }
+  return clean(raw)
+}
+
 /** 仅让 GSUID 的 QQBot 主动消息携带单次 legacy 标记 */
 async function sendLegacyQQBotMsg (bot, targetType, targetId, msg, botSelfId) {
   const markdownConfig = Bot.QQBotConfig?.config?.markdown || {}
@@ -90,8 +150,8 @@ async function sendLegacyQQBotMsg (bot, targetType, targetId, msg, botSelfId) {
       return await qqBotAdapter.sendFriendMsg({ ...target, legacy: true }, msg)
     }
   } catch (error) {
-    // 目标已注销/失效时换普通通道重发也是白费一次请求，直接交给上层标记不可达
-    if (isTargetGoneError(error)) throw error
+    // 目标已注销/失效，或该群没有主动消息权限时，换普通通道重发也是白费一次请求
+    if (isTargetGoneError(error) || isActiveDeniedError(error)) throw error
     logger.warn(`[gs-plugin] QQBot Legacy 主动发送失败，改用普通主动发送: ${error.message}`)
   }
 
@@ -162,6 +222,12 @@ export default class Client {
           logger.warn(`[gs-plugin] 目标不可达，已暂停发送 ${key}：${err?.message || err}`)
           return
         }
+        // 主动消息无权限：记下来，之后该目标改走被动发送，不再反复重试
+        if (isActiveDeniedError(err)) {
+          activeDeniedTargets.set(key, Date.now())
+          logger.warn(`[gs-plugin] ${key} 无主动消息权限，${ACTIVE_DENIED_TTL / 60000} 分钟内改为被动发送`)
+          return
+        }
         if (attempt >= SEND_RETRY_MAX) throw err
         const delay = SEND_RETRY_BASE_MS * 2 ** (attempt - 1)
         logger.warn(`[gs-plugin] 发送失败（第 ${attempt}/${SEND_RETRY_MAX} 次），${delay}ms 后重试 ${key}：${err?.message || err}`)
@@ -173,8 +239,26 @@ export default class Client {
     }
   }
 
+  /** 回执出站消息的平台 id：core 用 recall_message_id 控制帧回写会话记录与撤回。
+   *  core 侧用 receive_bytes() 读帧，必须发二进制帧；发文本帧会让它 KeyError: 'bytes' 直接断连 */
+  sendRecallReceipt (data, messageId) {
+    if (this.ws?.readyState !== 1) return
+    try {
+      this.ws.send(Buffer.from(JSON.stringify({
+        bot_id: this.name,
+        bot_self_id: String(data.bot_self_id || ''),
+        content: [{
+          type: 'recall_message_id',
+          data: { echo: String(data.echo), id: messageId }
+        }]
+      })))
+    } catch (error) {
+      logger.debug(`[gs-plugin] 发送回执失败: ${error.message}`)
+    }
+  }
+
   async sendBuiltMessage (context, sendMsg) {
-    const { data, bot, isQQBot } = context
+    const { data, bot, isQQBot, quote } = context
     const messageBuild = Config.messageBuild
     let sendRet, group_id, user_id
     const isGroup = data.target_type === 'group' || data.target_type === 'channel'
@@ -186,7 +270,9 @@ export default class Client {
     }
 
     const targetId = data.target_id
-    const forceActive = isGroup && isQQBot
+    // 已探测到该目标没有主动消息权限、或 QQBot 合并转发不是逐条拆发时，压制强制主动
+    const activeDenied = isActiveDeniedTarget(data)
+    const forceActive = isGroup && isQQBot && !activeDenied && isForwardSplitMode()
       ? shouldForceActiveMessage(messageBuild, data.bot_self_id, targetId)
       : false
     const legacy = shouldUseLegacy(messageBuild.legacyReply, isGroup ? targetId : null, data.bot_self_id)
@@ -198,16 +284,21 @@ export default class Client {
       }
       group_id = targetId
       const latest = getLatestMsg(group_id)
+      // 无主动权限又没有被动回复上下文时，普通发送同样会 40034105，直接跳过避免反复刷日志
+      if (activeDenied && !(latest && typeof latest.reply === 'function')) {
+        logger.debug(`[gs-plugin] 跳过无主动权限且无被动上下文的回包 ${targetKeyOf(data)}`)
+        return
+      }
       if (!forceActive && latest && typeof latest.reply === 'function') {
         if (latest.e) latest.e.legacy = legacy
-        await latest.reply(sendMsg)
-        sendRet = { message_id: `passive_${Date.now()}` }
+        const ret = await sendWithQuoteFallback(() => latest.reply(sendMsg), sendMsg, quote)
+        sendRet = { message_id: pickSentMessageId(ret) || `passive_${Date.now()}` }
       } else {
         const useLegacy = data.target_type === 'group' && isQQBot && legacy
         sendRet = useLegacy
-          ? await sendLegacyQQBotMsg(bot, 'group', group_id, sendMsg, data.bot_self_id)
+          ? await sendWithQuoteFallback(() => sendLegacyQQBotMsg(bot, 'group', group_id, sendMsg, data.bot_self_id), sendMsg, quote)
           : null
-        sendRet ||= await bot.pickGroup(group_id).sendMsg(sendMsg)
+        sendRet ||= await sendWithQuoteFallback(() => bot.pickGroup(group_id).sendMsg(sendMsg), sendMsg, quote)
       }
     } else {
       if (typeof bot.pickFriend !== 'function') {
@@ -218,14 +309,14 @@ export default class Client {
       const latest = getLatestMsg(user_id)
       if (latest && typeof latest.reply === 'function') {
         if (latest.e) latest.e.legacy = legacy
-        await latest.reply(sendMsg)
-        sendRet = { message_id: `passive_${Date.now()}` }
+        const ret = await sendWithQuoteFallback(() => latest.reply(sendMsg), sendMsg, quote)
+        sendRet = { message_id: pickSentMessageId(ret) || `passive_${Date.now()}` }
       } else {
         const useLegacy = isQQBot && legacy
         sendRet = useLegacy
-          ? await sendLegacyQQBotMsg(bot, 'direct', user_id, sendMsg, data.bot_self_id)
+          ? await sendWithQuoteFallback(() => sendLegacyQQBotMsg(bot, 'direct', user_id, sendMsg, data.bot_self_id), sendMsg, quote)
           : null
-        sendRet ||= await bot.pickFriend(user_id).sendMsg(sendMsg)
+        sendRet ||= await sendWithQuoteFallback(() => bot.pickFriend(user_id).sendMsg(sendMsg), sendMsg, quote)
       }
     }
 
@@ -239,6 +330,11 @@ export default class Client {
         group_id,
         onebot_id: Math.floor(Math.random() * Math.pow(2, 32)) | 0
       })
+    }
+
+    // core 下发帧带回执令牌时，把真实平台消息 id 回执回去（会话管理人工发送 / 出站记录 / 撤回）
+    if (data.echo !== undefined && data.echo !== null && data.echo !== '') {
+      this.sendRecallReceipt(data, pickSentMessageId(sendRet))
     }
   }
 
@@ -307,7 +403,7 @@ export default class Client {
       if (gachaBatch) clearTimeout(gachaBatch.timer)
       this.gachaBatch = this.gachaBatch || {}
       this.gachaBatch[gachaKey] = {
-        ctx: { data, bot, isQQBot },
+        ctx: { data, bot, isQQBot, quote },
         mdList: gachaMdList,
         sendMsg,
         timer: setTimeout(flushGacha, GACHA_BATCH_WINDOW)
@@ -318,7 +414,7 @@ export default class Client {
     // 非兑换码回包：先冲刷未发送的兑换码批次，保持顺序
     if (gachaBatch) await flushGacha()
     if (!sendMsg.length) return
-    await this.dispatchBuiltMessage({ data, bot, isQQBot }, sendMsg)
+    await this.dispatchBuiltMessage({ data, bot, isQQBot, quote }, sendMsg)
   }
 
   createGSUidWs () {

@@ -770,9 +770,15 @@ async function makeGSUidSendMsg (data, prevGachaMdList) {
       case 'reply_id': {
         // GS 可能回 reply_id（原消息 id）或 reply（引用文字），优先用 reply_id 作为引用
         const rid = String(replyIdData || msg.data || '').trim()
-        const quotedId = /^\d+$/.test(rid) || /^[0-9a-f]{16,}$/i.test(rid) ? rid : null
+        // reply_id 段一定是消息 id（QQBot 为 ROBOT1.0_xxx 形式）；reply 段可能是引用文字，按格式判断
+        const fromReplyIdSegment = Boolean(replyIdData) || msg.type === 'reply_id'
+        const quotedId = fromReplyIdSegment
+          ? (rid && !/\s/.test(rid) ? rid : null)
+          : (/^\d+$/.test(rid) || /^[0-9a-f]{16,}$/i.test(rid) ? rid : null)
         if (quotedId) {
           quote = await bot.getMsg?.(quotedId) || await bot[target].getChatHistory?.(quotedId, 1)?.[0] || quote || null
+          // 平台没有反查接口（如 QQBot）时仍保留 id，发送侧可以直接用它引用
+          quote ||= { message_id: quotedId }
         }
         break
       }
